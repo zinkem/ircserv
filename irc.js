@@ -30,7 +30,7 @@ function fetchChannel(channel) {
   return channels[channel];
 }
 
-//call this on incoming sockets to add listeners for maintaining user and channels
+//call this on incoming sockets to add listeners for cleanup
 function prepareSocket(client_socket) {
 
   //send channel part message
@@ -39,8 +39,9 @@ function prepareSocket(client_socket) {
     if( src.name ){
       var channel = src.name;
       setTimeout(() => {
-        var id = client_socket.username || client_socket.remoteAddress;
-        channels[channel].write(id + ' left ' + channel + '\n');
+        var id = client_socket.username;
+        if( id )
+          channels[channel].write(':'+id + ' PART :' + channel + '\n');
       }, 0);
       console.log('channel unpipe', channel);
     } else if( src.username ) {
@@ -54,7 +55,6 @@ function prepareSocket(client_socket) {
     if( !src.name ) return;
     var channel = src.name;
     var id = client_socket.username || client_socket.remoteAddress;
-    channels[channel].write(id + ' joined ' + channel + '\n');
     console.log('channel pipe', channel);
   });
 
@@ -142,7 +142,25 @@ class CommandParser extends Writable {
           :WiZ NICK Kilroy                ; WiZ changed his nickname to Kilroy.
 
         */
-        return 'NICK not yet implemented';
+
+        if( args.length < 1 )
+          return 'ERR_NONICKNAMEGIVEN';
+
+        var new_name = args[0];
+
+        if( users[new_name] ) {
+          return 'ERR_NICKNAMEINUSE';
+        }
+
+        var old_name = new_name;
+        if( this.user ){
+          old_name = this.user.username;
+          this.user.username = new_name;
+          users[new_name] = this.user;
+          delete users[old_name];
+        }
+
+        return [':'+old_name,'NICK',new_name].join(' ');
       },
       USER: (args) => {
         /* RFC 1459 
@@ -222,8 +240,18 @@ class CommandParser extends Writable {
             delete users[username];
           }
         });
-        
-        return 'Welcome to the server, '+ username +'!'
+
+        var str_001 = [ ':localhost 001',
+                        username,
+                        ':Welcome to localhost irc server!'].join(' ');
+        var str_002 = [ ':localhost 002',
+                        username,
+                        ':Your host is localhost' ].join(' ');
+        var str_003 = [ ':localhost 003',
+                        username,
+                        ':This server was created a while back'].join(' ');
+
+        return [str_001, str_002, str_003].join('\n');
       },
       SERVER: (args) => {
         /* RFC 1459 
@@ -472,12 +500,11 @@ class CommandParser extends Writable {
         var user = this.user;
         if( !user ) return 'please register!';
         clientSubscribe(chan, user);
-        var RPL_TOPIC_string = [':server 322',chan,':no topic'].join(' ');
 
-        channels[chan].write(':'+user.username+' JOIN :'+chan+'\n');
+        var user_host = '~'+user.username+'@'+this.socket.remoteAddress;
 
-        return this.command_list.NAMES([ chan ]);
-
+        channels[chan].write(':'+user.username+'!'+user_host+' JOIN :'+chan+'\n');
+        return [ this.command_list.TOPIC([ chan ]), this.command_list.NAMES([ chan ]) ].join('\n');
       },
       PART: (args) => {
         /* RFC 1459 
@@ -502,10 +529,11 @@ class CommandParser extends Writable {
            PART #oz-ops,&group5            ; leave both channels "&group5" and
            "#oz-ops".
         */
-        var chan = args[0];
+        var chan = args.shift();
         var user = this.user;
         clientUnSubscribe(chan, user);
-        return 'left ' + chan;
+        channels[chan].write(':'+user.username + ' PART ' + chan +
+                             ' :' + args.join(' ') + '\n');
       },
       MODE: (args) => {
         /*
@@ -654,7 +682,10 @@ class CommandParser extends Writable {
 
           TOPIC #test                     ; check the topic for #test.
         */
-        return 'TOPIC not yet implemented';
+        var chan = args[0];
+        var username = this.user.username;
+        var RPL_TOPIC_string = [':localhost 332',username,chan,':Generic Topic'].join(' ');
+        return RPL_TOPIC_string;
       },
       NAMES: (args) => {
         /* rfc 1459
@@ -697,8 +728,6 @@ class CommandParser extends Writable {
         for( var k in users )
           if( users[k].username )
             result.push(users[k].username)
-
-        console.log(result);
 
         var RPL_NAMREPLY_string = [':localhost 353',
                                    user.username,
@@ -1154,6 +1183,7 @@ class CommandParser extends Writable {
           msg.push(':'+args.join(' ')+'\n');
           destination.write(msg.join(' '));
         } else {
+          console.log(chan, args);
           return 'no such user or channel';
         }
       },
@@ -1180,7 +1210,26 @@ class CommandParser extends Writable {
 
 
         */
-        return 'NOTICE not yet implemented';
+        var chan = args.shift();
+
+        if( !this.user )
+          return 'please register!';
+
+        var destination = fetchChannel(chan);
+
+        if( !destination ) destination = users[chan];
+
+        if( destination ){
+          var msg = [];
+          msg.push(':'+this.user.username);
+          msg.push('NOTICE');
+          msg.push(chan);
+          msg.push(':'+args.join(' ')+'\n');
+          destination.write(msg.join(' '));
+        } else {
+          console.log(chan, args);
+          return 'no such user or channel';
+        }
       },
       WHO: (args) => {
         /* RFC 1459 
@@ -1306,7 +1355,14 @@ class CommandParser extends Writable {
 
           PING WiZ                        ; PING message being sent to nick WiZ
         */
-        return 'PING not yet implemented';
+        console.log('PING', args);
+        var dest = args[1];
+
+        if( users[dest] ){
+          users[dest].write(':'+this.user.username + ' PING ' + dest);
+        }
+
+        return ':localhost PONG';
       },
       PONG: (args) => {
         /*
@@ -1329,7 +1385,8 @@ class CommandParser extends Writable {
           PONG csd.bu.edu tolsun.oulu.fi  ; PONG message from csd.bu.edu to
           tolsun.oulu.fi
         */
-        return 'PONG not yet implemented';
+        console.log('PONG', args);
+        return ':localhost NOTICE * PONG? PING!';
       },
       ERROR: (args) => {
         /*
