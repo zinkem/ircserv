@@ -79,7 +79,7 @@ class CommandParser extends Writable {
         /*
           RFC 1459
 
-          4.1.1 Password message
+          4.1.1 Password message        STATUS no implementation
 
 
           Command: PASS
@@ -108,7 +108,7 @@ class CommandParser extends Writable {
       NICK: (args) => {
         /*
           RFC 1459
-          4.1.2 Nick message
+          4.1.2 Nick message            STATUS incomplete
 
           Command: NICK
           Parameters: <nickname> [ <hopcount> ]
@@ -164,7 +164,7 @@ class CommandParser extends Writable {
       },
       USER: (args) => {
         /* RFC 1459 
-           4.1.3 User message
+           4.1.3 User message           STATUS incomplete
 
            Command: USER
            Parameters: <username> <hostname> <servername> <realname>
@@ -256,7 +256,7 @@ class CommandParser extends Writable {
       SERVER: (args) => {
         /* RFC 1459 
 
-           4.1.4 Server message
+           4.1.4 Server message         STATUS no implementation
 
            Command: SERVER
            Parameters: <servername> <hopcount> <info>
@@ -310,7 +310,7 @@ class CommandParser extends Writable {
       },
       OPER: (args) => {
         /* RFC 1459 
-           4.1.5 Oper
+           4.1.5 Oper                   STATUS no implementation
 
            Command: OPER
            Parameters: <user> <password>
@@ -340,7 +340,7 @@ class CommandParser extends Writable {
       },
       QUIT: (args) => {
         /* RFC 1459
-           4.1.6 Quit
+           4.1.6 Quit                   STATUS incomplete
 
            Command: QUIT
            Parameters: [<Quit message>]
@@ -379,7 +379,7 @@ class CommandParser extends Writable {
       },
       SQUIT: (args) => {
         /* RFC 1459
-           4.1.7 Server quit message
+           4.1.7 Server quit message    STATUS no implemenation
 
            Command: SQUIT
            Parameters: <server> <comment>
@@ -437,7 +437,7 @@ class CommandParser extends Writable {
       },
       JOIN: (args) => {
         /* RFC 1459
-           4.2.1 Join message
+           4.2.1 Join message           STATUS incomplete error handling
 
            Command: JOIN
            Parameters: <channel>{,<channel>} [<key>{,<key>}]
@@ -508,7 +508,7 @@ class CommandParser extends Writable {
       },
       PART: (args) => {
         /* RFC 1459 
-           4.2.2 Part message
+           4.2.2 Part message           STATUS incomplete multiple channels, error handling
 
            Command: PART
            Parameters: <channel>{,<channel>}
@@ -537,7 +537,7 @@ class CommandParser extends Writable {
       },
       MODE: (args) => {
         /*
-          4.2.3 Mode message
+          4.2.3 Mode message            STATUS incomplete PRIORITY
 
           Command: MODE
 
@@ -657,7 +657,7 @@ class CommandParser extends Writable {
       },
       TOPIC: (args) => {
         /*RFC 1459 
-          4.2.4 Topic message
+          4.2.4 Topic message           STATUS incomplete
 
           Command: TOPIC
           Parameters: <channel> [<topic>]
@@ -689,7 +689,7 @@ class CommandParser extends Writable {
       },
       NAMES: (args) => {
         /* rfc 1459
-           4.2.5 Names message
+           4.2.5 Names message          STATUS incomplete multiple channels
 
            Command: NAMES
            Parameters: [<channel>{,<channel>}]
@@ -742,12 +742,36 @@ class CommandParser extends Writable {
 
       },
       LIST: (args) => {
+        /*
+          4.2.6 List message            STATUS incomplete multiple channels, server
+
+          Command: LIST
+          Parameters: [<channel>{,<channel>} [<server>]]
+
+          The list message is used to list channels and their topics.  If  the
+          <channel>  parameter  is  used,  only  the  status  of  that  channel
+          is displayed.  Private  channels  are  listed  (without  their
+          topics)  as channel "Prv" unless the client generating the query is
+          actually on that channel.  Likewise, secret channels are not listed
+          at  all  unless  the client is a member of the channel in question.
+
+          Numeric Replies:
+
+          ERR_NOSUCHSERVER                RPL_LISTSTART
+          RPL_LIST                        RPL_LISTEND
+
+          Examples:
+
+          LIST                            ; List all channels.
+
+          LIST #twilight_zone,#42         ; List channels #twilight_zone and #42
+        */
         var chanlist = Object.keys(channels).join('\n');
         return chanlist;
       },
       INVITE: (args) => {
         /* rfc 1459
-           4.2.7 Invite message
+           4.2.7 Invite message         STATUS not implemented
 
            Command: INVITE
            Parameters: <nickname> <channel>
@@ -782,7 +806,7 @@ class CommandParser extends Writable {
         /*
 
           rfc 1459
-          4.2.8 Kick command
+          4.2.8 Kick command            STATUS not implemented
 
           Command: KICK
           Parameters: <channel> <user> [<comment>]
@@ -825,7 +849,7 @@ class CommandParser extends Writable {
       },
       VERSION: (args) => {
         /* RFC 1459
-           4.3.1 Version message
+           4.3.1 Version message        STATUS dummy implementation
 
            Command: VERSION
            Parameters: [<server>]
@@ -851,7 +875,7 @@ class CommandParser extends Writable {
       STATS: (args) => {
         
         /* RFC 1459
-           4.3.2 Stats message
+           4.3.2 Stats message          STATUS not implemented
 
            Command: STATS
            Parameters: [<query> [<server>]]
@@ -915,7 +939,7 @@ class CommandParser extends Writable {
       },
       LINKS: (args) => {
         /*
-          4.3.3 Links message
+          4.3.3 Links message           STATUS not implemented
 
           Command: LINKS
           Parameters: [[<remote server>] <server mask>]
@@ -947,7 +971,7 @@ class CommandParser extends Writable {
       TIME: (args) => {
 
         /*
-          4.3.4 Time message
+          4.3.4 Time message            STATUS dummy implementation
 
           Command: TIME
           Parameters: [<server>]
@@ -973,7 +997,7 @@ class CommandParser extends Writable {
       },
       CONNECT: (args) => {
         /* RFC 1459
-           4.3.5 Connect message
+           4.3.5 Connect message        STATUS not implemented
 
            Command: CONNECT
            Parameters: <target server> [<port> [<remote server>]]
@@ -1004,7 +1028,7 @@ class CommandParser extends Writable {
       TRACE: (args) => {
 
         /*
-          4.3.6 Trace message
+          4.3.6 Trace message           STATUS not implemented
 
           Command: TRACE
           Parameters: [<server>]
@@ -1053,7 +1077,7 @@ class CommandParser extends Writable {
       },
       ADMIN: (args) => {
         /*
-          4.3.7 Admin command
+          4.3.7 Admin command           STATUS not implemented
 
           Command: ADMIN
           Parameters: [<server>]
@@ -1081,7 +1105,7 @@ class CommandParser extends Writable {
       },
       INFO: (args) => {
         /* RFC 1459
-           4.3.8 Info command
+           4.3.8 Info command           STATUS not implemented
 
            Command: INFO
            Parameters: [<server>]
@@ -1119,7 +1143,7 @@ class CommandParser extends Writable {
           to ensure it happens in a reliable and structured manner.
         */
         /*
-          4.4.1 Private messages
+          4.4.1 Private messages        STATUS incomplete error handling
 
           Command: PRIVMSG
           Parameters: <receiver>{,<receiver>} <text to be sent>
@@ -1190,7 +1214,7 @@ class CommandParser extends Writable {
       NOTICE: (args) => {
 
         /*
-          4.4.2 Notice
+          4.4.2 Notice                  STATUS incomplete error handling
 
           Command: NOTICE
           Parameters: <nickname> <text>
@@ -1233,7 +1257,7 @@ class CommandParser extends Writable {
       },
       WHO: (args) => {
         /* RFC 1459 
-           4.5.1 Who query
+           4.5.1 Who query              STATUS dummy implementation
 
            Command: WHO
            Parameters: [<name> [<o>]]
@@ -1269,10 +1293,89 @@ class CommandParser extends Writable {
         var userlist = Object.keys(users).join(' ');
         return userlist;
       },
+      WHOIS: (args) => {
+        /*
+          4.5.2 Whois query             STATUS no implementation
+
+          Command: WHOIS
+          Parameters: [<server>] <nickmask>[,<nickmask>[,...]]
+
+          This message is used to query information about particular user.  The
+          server will answer this message with several numeric messages
+          indicating different statuses of each user which matches the nickmask
+          (if you are entitled to see them).  If no wildcard is present in the
+          <nickmask>, any information about that nick which you are allowed to
+          see is presented.  A comma (',') separated list of nicknames may be
+          given.
+
+          The latter version sends the query to a specific server.  It is
+          useful if you want to know how long the user in question has been
+          idle as only local server (ie. the server the user is directly
+          connected to) knows that information, while everything else is
+          globally known.
+
+          Numeric Replies:
+
+          ERR_NOSUCHSERVER                ERR_NONICKNAMEGIVEN
+          RPL_WHOISUSER                   RPL_WHOISCHANNELS
+          RPL_WHOISCHANNELS               RPL_WHOISSERVER
+          RPL_AWAY                        RPL_WHOISOPERATOR
+          RPL_WHOISIDLE                   ERR_NOSUCHNICK
+          RPL_ENDOFWHOIS
+
+          Examples:
+
+          WHOIS wiz                       ; return available user information
+          about nick WiZ
+
+          WHOIS eff.org trillian          ; ask server eff.org for user
+          information about trillian
+        */
+        return 'WHOIS not yet implemented'
+      },
+      WHOWAS: (args) => {
+        /*
+          4.5.3 Whowas                  STATUS not yet implemented
+
+          Command: WHOWAS
+          Parameters: <nickname> [<count> [<server>]]
+
+          Whowas asks for information about a nickname which no longer exists.
+          This may either be due to a nickname change or the user leaving IRC.
+          In response to this query, the server searches through its nickname
+          history, looking for any nicks which are lexically the same (no wild
+          card matching here).  The history is searched backward, returning the
+          most recent entry first.  If there are multiple entries, up to
+          <count> replies will be returned (or all of them if no <count>
+          parameter is given).  If a non-positive number is passed as being
+          <count>, then a full search is done.
+
+          Numeric Replies:
+
+          ERR_NONICKNAMEGIVEN             ERR_WASNOSUCHNICK
+          RPL_WHOWASUSER                  RPL_WHOISSERVER
+          RPL_ENDOFWHOWAS
+
+          Examples:
+
+          WHOWAS Wiz                      ; return all information in the nick
+          history about nick "WiZ";
+
+          WHOWAS Mermaid 9                ; return at most, the 9 most recent
+          entries in the nick history for
+          "Mermaid";
+
+          WHOWAS Trillian 1 *.edu         ; return the most recent history for
+          "Trillian" from the first server found
+          to match "*.edu".
+        */
+
+        return 'WHOWAS not yet implemented'
+      },
       KILL: (args) => {
         /*
 
-          4.6.1 Kill message
+          4.6.1 Kill message            STATUS not implemented
 
           Command: KILL
           Parameters: <nickname> <comment>
@@ -1324,7 +1427,7 @@ class CommandParser extends Writable {
       PING: (args) => {
         /*
 
-          4.6.2 Ping message
+          4.6.2 Ping message            STATUS dummy implementation
 
           Command: PING
           Parameters: <server1> [<server2>]
@@ -1366,7 +1469,7 @@ class CommandParser extends Writable {
       },
       PONG: (args) => {
         /*
-          4.6.3 Pong message
+          4.6.3 Pong message            STATUS dummy implementation
 
           Command: PONG
           Parameters: <daemon> [<daemon2>]
@@ -1390,7 +1493,7 @@ class CommandParser extends Writable {
       },
       ERROR: (args) => {
         /*
-          4.6.4 Error
+          4.6.4 Error                   STATUS not implemented
 
           Command: ERROR
           Parameters: <error message>
