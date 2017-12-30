@@ -1,0 +1,11 @@
+{
+  "name": "irc",
+  "version": "1.0.0",
+  "description": "irc server for node.js",
+  "main": "irc.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "author": "",
+  "license": "ISC"
+}
