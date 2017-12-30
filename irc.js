@@ -103,7 +103,7 @@ class CommandParser extends Writable {
           PASS secretpasswordhere
 
         */
-        return 'not yet implemented';
+        return 'PASS not yet implemented';
       },
       NICK: (args) => {
         /*
@@ -142,7 +142,7 @@ class CommandParser extends Writable {
           :WiZ NICK Kilroy                ; WiZ changed his nickname to Kilroy.
 
         */
-        return 'not yet implemented';
+        return 'NICK not yet implemented';
       },
       USER: (args) => {
         /* RFC 1459 
@@ -213,7 +213,7 @@ class CommandParser extends Writable {
 
         prepareSocket(this.user);
         clientSubscribe('#public', this.user);
-          
+
         this.user.pipe(this.socket);
         
         this.socket.on('close', () => {
@@ -266,14 +266,6 @@ class CommandParser extends Writable {
 
            Example:
 
-
-
-
-           Oikarinen & Reed                                               [Page 16]
-           
-           RFC 1459              Internet Relay Chat Protocol              May 1993
-
-
            SERVER test.oulu.fi 1 :[tolsun.oulu.fi] Experimental server
            ; New server test.oulu.fi introducing
            itself and attempting to register.  The
@@ -286,7 +278,7 @@ class CommandParser extends Writable {
            for csd.bu.edu which is 5 hops away.
 
         */
-        return 'not yet implemented';
+        return 'SEVRER not yet implemented';
       },
       OPER: (args) => {
         /* RFC 1459 
@@ -316,7 +308,7 @@ class CommandParser extends Writable {
            using a username of "foo" and "bar" as
            the password.
         */
-        return 'not yet implemented';
+        return 'OPER not yet implemented';
       },
       QUIT: (args) => {
         /* RFC 1459
@@ -388,14 +380,6 @@ class CommandParser extends Writable {
            server connections) for all other servers which are considered to be
            behind that link.
 
-
-
-
-           Oikarinen & Reed                                               [Page 18]
-           
-           RFC 1459              Internet Relay Chat Protocol              May 1993
-
-
            Similarly, a QUIT message must be sent to the other connected servers
            rest of the network on behalf of all clients behind that link.  In
            addition to this, all channel members of a channel which lost a
@@ -421,7 +405,7 @@ class CommandParser extends Writable {
            "cm22.eng.umd.edu" from the net
            because "Server out of control".
         */
-        return 'not yet implemented';
+        return 'SQUIT not yet implemented';
       },
       JOIN: (args) => {
         /* RFC 1459
@@ -464,6 +448,7 @@ class CommandParser extends Writable {
            ERR_CHANNELISFULL               ERR_BADCHANMASK
            ERR_NOSUCHCHANNEL               ERR_TOOMANYCHANNELS
            RPL_TOPIC
+           RPL_NAMREPLY
 
            Examples:
 
@@ -487,7 +472,12 @@ class CommandParser extends Writable {
         var user = this.user;
         if( !user ) return 'please register!';
         clientSubscribe(chan, user);
-        return 'joined ' + chan;
+        var RPL_TOPIC_string = [':server 322',chan,':no topic'].join(' ');
+
+        channels[chan].write(':'+user.username+' JOIN :'+chan+'\n');
+
+        return this.command_list.NAMES([ chan ]);
+
       },
       PART: (args) => {
         /* RFC 1459 
@@ -635,7 +625,7 @@ class CommandParser extends Writable {
 
         //channel mode args[0] = channel (4.2.3.1)
         //user mode args[0] = nickname (4.2.3.2)
-        return 'not yet implemented'
+        return ':localhost 324 '+this.user.username+' '+args[0]+' +t';
       },
       TOPIC: (args) => {
         /*RFC 1459 
@@ -655,13 +645,6 @@ class CommandParser extends Writable {
           RPL_NOTOPIC                     RPL_TOPIC
           ERR_CHANOPRIVSNEEDED
 
-
-
-          Oikarinen & Reed                                               [Page 23]
-          
-          RFC 1459              Internet Relay Chat Protocol              May 1993
-
-
           Examples:
 
           :Wiz TOPIC #test :New topic     ;User Wiz setting the topic.
@@ -671,7 +654,7 @@ class CommandParser extends Writable {
 
           TOPIC #test                     ; check the topic for #test.
         */
-        return 'not yet implemented';
+        return 'TOPIC not yet implemented';
       },
       NAMES: (args) => {
         /* rfc 1459
@@ -680,9 +663,54 @@ class CommandParser extends Writable {
            Command: NAMES
            Parameters: [<channel>{,<channel>}]
 
-           returns users in channels, or all channels if no args
+           By using the NAMES command, a user can list all nicknames that are
+           visible to them on any channel that they can see.  Channel names
+           which they can see are those which aren't private (+p) or secret (+s)
+           or those which they are actually on.  The <channel> parameter
+           specifies which channel(s) to return information about if valid.
+           There is no error reply for bad channel names.
+
+           If no <channel> parameter is given, a list of all channels and their
+           occupants is returned.  At the end of this list, a list of users who
+           are visible but either not on any channel or not on a visible channel
+           are listed as being on `channel' "*".
+
+           Numerics:
+
+           RPL_NAMREPLY                    RPL_ENDOFNAMES
+
+           Examples:
+
+           NAMES #twilight_zone,#42        ; list visible users on #twilight_zone
+           and #42 if the channels are visible to
+           you.
+
+           NAMES                           ; list all visible channels and users
+
         */
-        return 'not yet implemented'
+
+        var chan = args[0];
+        var user = this.user;
+        var result = [];
+        var users = channels[chan]._readableState.pipes;
+
+        for( var k in users )
+          if( users[k].username )
+            result.push(users[k].username)
+
+        console.log(result);
+
+        var RPL_NAMREPLY_string = [':localhost 353',
+                                   user.username,
+                                   '=',
+                                   chan,
+                                   ':'+result.join(' ')].join(' ');
+        var RPL_ENDOFNAMES_string = [':localhost 366',
+                                     user.username,
+                                     chan,
+                                     ':End of /NAMES list'].join(' ');
+        return [ RPL_NAMREPLY_string, RPL_ENDOFNAMES_string ].join('\n');
+
       },
       LIST: (args) => {
         var chanlist = Object.keys(channels).join('\n');
@@ -719,7 +747,7 @@ class CommandParser extends Writable {
            #Twilight_zone
 
         */
-        return 'not yet implemented'
+        return 'INVITE not yet implemented'
       },
       KICK: (args) => {
         /*
@@ -764,7 +792,7 @@ class CommandParser extends Writable {
 
         */
         
-        return 'not yet implemented'
+        return 'KICK not yet implemented'
       },
       VERSION: (args) => {
         /* RFC 1459
@@ -772,14 +800,6 @@ class CommandParser extends Writable {
 
            Command: VERSION
            Parameters: [<server>]
-
-
-
-
-           Oikarinen & Reed                                               [Page 26]
-           
-           RFC 1459              Internet Relay Chat Protocol              May 1993
-
 
            The VERSION message is used  to  query  the  version  of  the  server
            program.  An optional parameter <server> is used to query the version
@@ -797,7 +817,7 @@ class CommandParser extends Writable {
            VERSION tolsun.oulu.fi          ; check the version of server
            "tolsun.oulu.fi".
         */
-        return 'node.js irc version 0.0.1 alpha';
+        return 'RPL_VERSION node.js irc version 0.0.1 alpha';
       },
       STATS: (args) => {
         
@@ -862,7 +882,7 @@ class CommandParser extends Writable {
            :Wiz STATS c eff.org            ; request by WiZ for C/N line
            information from server eff.org
         */
-        return 'not yet implemented';
+        return 'STATS not yet implemented';
       },
       LINKS: (args) => {
         /*
@@ -893,7 +913,7 @@ class CommandParser extends Writable {
           server matching *.edu for a list of
           servers matching *.bu.edu.
         */
-        return 'not yet implemented';
+        return 'LINKS not yet implemented';
       },
       TIME: (args) => {
 
@@ -950,7 +970,7 @@ class CommandParser extends Writable {
            eff.org and csd.bu.edu connected on port
            6667.
         */
-        return 'not yet implemented'
+        return 'CONNECT not yet implemented'
       },
       TRACE: (args) => {
 
@@ -1000,7 +1020,7 @@ class CommandParser extends Writable {
 
           :WiZ TRACE AngelDust            ; TRACE issued by WiZ to nick AngelDust
         */
-        return 'not yet implemented'
+        return 'TRACE not yet implemented'
       },
       ADMIN: (args) => {
         /*
@@ -1028,7 +1048,7 @@ class CommandParser extends Writable {
           :WiZ ADMIN *.edu                ; ADMIN request from WiZ for first
           server found to match *.edu.
         */
-        return 'not yet implemented'
+        return 'ADMIN not yet implemented'
       },
       INFO: (args) => {
         /* RFC 1459
@@ -1057,7 +1077,7 @@ class CommandParser extends Writable {
            INFO Angel                      ; request info from the server that
            Angel is connected to.
         */
-        return 'not yet implemented';
+        return 'INFO not yet implemented';
       },
       PRIVMSG: (args) => {
         /*
@@ -1160,7 +1180,7 @@ class CommandParser extends Writable {
 
 
         */
-        return 'not yet implemented';
+        return 'NOTICE not yet implemented';
       },
       WHO: (args) => {
         /* RFC 1459 
@@ -1199,8 +1219,154 @@ class CommandParser extends Writable {
         */
         var userlist = Object.keys(users).join(' ');
         return userlist;
+      },
+      KILL: (args) => {
+        /*
+
+          4.6.1 Kill message
+
+          Command: KILL
+          Parameters: <nickname> <comment>
+
+          The KILL message is used to cause a client-server connection to be
+          closed by the server which has the actual connection.  KILL is used
+          by servers when they encounter a duplicate entry in the list of valid
+          nicknames and is used to remove both entries.  It is also available
+          to operators.
+
+          Clients which have automatic reconnect algorithms effectively make
+          this command useless since the disconnection is only brief.  It does
+          however break the flow of data and can be used to stop large amounts
+          of being abused, any user may elect to receive KILL messages
+          generated for others to keep an 'eye' on would be trouble spots.
+
+          In an arena where nicknames are required to be globally unique at all
+          times, KILL messages are sent whenever 'duplicates' are detected
+          (that is an attempt to register two users with the same nickname) in
+          the hope that both of them will disappear and only 1 reappear.
+
+          The comment given must reflect the actual reason for the KILL.  For
+          server-generated KILLs it usually is made up of details concerning
+          the origins of the two conflicting nicknames.  For users it is left
+          up to them to provide an adequate reason to satisfy others who see
+          it.  To prevent/discourage fake KILLs from being generated to hide
+          the identify of the KILLer, the comment also shows a 'kill-path'
+          which is updated by each server it passes through, each prepending
+          its name to the path.
+
+          Numeric Replies:
+
+          ERR_NOPRIVILEGES                ERR_NEEDMOREPARAMS
+          ERR_NOSUCHNICK                  ERR_CANTKILLSERVER
+
+
+          KILL David (csd.bu.edu <- tolsun.oulu.fi)
+          ; Nickname collision between csd.bu.edu
+          and tolson.oulu.fi
+
+
+          NOTE:
+          It is recommended that only Operators be allowed to kill other users
+          with KILL message.  In an ideal world not even operators would need
+          to do this and it would be left to servers to deal with.
+        */
+        return 'KILL not yet implemented';
+      },
+      PING: (args) => {
+        /*
+
+          4.6.2 Ping message
+
+          Command: PING
+          Parameters: <server1> [<server2>]
+
+          The PING message is used to test the presence of an active client at
+          the other end of the connection.  A PING message is sent at regular
+          intervals if no other activity detected coming from a connection.  If
+          a connection fails to respond to a PING command within a set amount
+          of time, that connection is closed.
+
+          Any client which receives a PING message must respond to <server1>
+          (server which sent the PING message out) as quickly as possible with
+          an appropriate PONG message to indicate it is still there and alive.
+          Servers should not respond to PING commands but rely on PINGs from
+          the other end of the connection to indicate the connection is alive.
+          If the <server2> parameter is specified, the PING message gets
+          forwarded there.
+
+          Numeric Replies:
+
+          ERR_NOORIGIN                    ERR_NOSUCHSERVER
+
+          Examples:
+
+          PING tolsun.oulu.fi             ; server sending a PING message to
+          another server to indicate it is still
+          alive.
+
+          PING WiZ                        ; PING message being sent to nick WiZ
+        */
+        return 'PING not yet implemented';
+      },
+      PONG: (args) => {
+        /*
+          4.6.3 Pong message
+
+          Command: PONG
+          Parameters: <daemon> [<daemon2>]
+
+          PONG message is a reply to ping message.  If parameter <daemon2> is
+          given this message must be forwarded to given daemon.  The <daemon>
+          parameter is the name of the daemon who has responded to PING message
+          and generated this message.
+
+          Numeric Replies:
+
+          ERR_NOORIGIN                    ERR_NOSUCHSERVER
+
+          Examples:
+
+          PONG csd.bu.edu tolsun.oulu.fi  ; PONG message from csd.bu.edu to
+          tolsun.oulu.fi
+        */
+        return 'PONG not yet implemented';
+      },
+      ERROR: (args) => {
+        /*
+          4.6.4 Error
+
+          Command: ERROR
+          Parameters: <error message>
+
+          The ERROR command is for use by servers when reporting a serious or
+          fatal error to its operators.  It may also be sent from one server to
+          another but must not be accepted from any normal unknown clients.
+
+          An ERROR message is for use for reporting errors which occur with a
+          server-to-server link only.  An ERROR message is sent to the server
+          at the other end (which sends it to all of its connected operators)
+          and to all operators currently connected.  It is not to be passed
+          onto any other servers by a server if it is received from a server.
+
+          When a server sends a received ERROR message to its operators, the
+          message should be encapsulated inside a NOTICE message, indicating
+          that the client was not responsible for the error.
+
+          Numerics:
+
+          None.
+
+          Examples:
+
+          ERROR :Server *.fi already exists; ERROR message to the other server
+          which caused this error.
+
+          NOTICE WiZ :ERROR from csd.bu.edu -- Server *.fi already exists
+          ; Same ERROR message as above but sent
+          to user WiZ on the other server.
+        */
+        return 'ERROR not yet implemented';
       }
-      
     }
 
   }
@@ -1228,7 +1394,7 @@ class CommandParser extends Writable {
     var client_id = this.socket.remoteAddress + ' ' + this.socket.remotePort;
     if( this.user )
       client_id = this.user.username 
-      
+
     if( res ) { 
       console.log(client_id, res);
       this.socket.write(res + '\n');
