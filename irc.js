@@ -5,6 +5,14 @@ const { Writable,
 const net = require('net');
 const proc = require('process');
 
+const err_codes = require('./err_list.json');
+const rpl_codes = require('./rpl_list.json');
+
+
+console.log(err_codes);
+console.log(rpl_codes);
+
+
 var users = {};
 var channels = {};
 
@@ -76,70 +84,66 @@ class CommandParser extends Writable {
     
     this.command_list = {
       PASS: (args) => {
-        /*
-          RFC 1459
+        /* RFC 1459
+           4.1.1 Password message       STATUS no implementation
 
-          4.1.1 Password message        STATUS no implementation
+           Command: PASS
+           Parameters: <password>
 
+           The PASS command is used to set a 'connection password'.  The
+           password can and must be set before any attempt to register the
+           connection is made.  Currently this requires that clients send a PASS
+           command before sending the NICK/USER combination and servers *must*
+           send a PASS command before any SERVER command.  The password supplied
+           must match the one contained in the C/N lines (for servers) or I
+           lines (for clients).  It is possible to send multiple PASS commands
+           before registering but only the last one sent is used for
+           verification and it may not be changed once registered.  Numeric
+           Replies:
 
-          Command: PASS
-          Parameters: <password>
+           ERR_NEEDMOREPARAMS              ERR_ALREADYREGISTRED
 
-          The PASS command is used to set a 'connection password'.  The
-          password can and must be set before any attempt to register the
-          connection is made.  Currently this requires that clients send a PASS
-          command before sending the NICK/USER combination and servers *must*
-          send a PASS command before any SERVER command.  The password supplied
-          must match the one contained in the C/N lines (for servers) or I
-          lines (for clients).  It is possible to send multiple PASS commands
-          before registering but only the last one sent is used for
-          verification and it may not be changed once registered.  Numeric
-          Replies:
+           Example:
 
-          ERR_NEEDMOREPARAMS              ERR_ALREADYREGISTRED
-
-          Example:
-
-          PASS secretpasswordhere
+           PASS secretpasswordhere
 
         */
         return 'PASS not yet implemented';
       },
       NICK: (args) => {
-        /*
-          RFC 1459
-          4.1.2 Nick message            STATUS incomplete
+        /* RFC 1459
+           4.1.2 Nick message           STATUS incomplete
 
-          Command: NICK
-          Parameters: <nickname> [ <hopcount> ]
+           Command: NICK
+           Parameters: <nickname> [ <hopcount> ]
 
-          NICK message is used to give user a nickname or change the previous
-          one.  The <hopcount> parameter is only used by servers to indicate
-          how far away a nick is from its home server.  A local connection has
-          a hopcount of 0.  If supplied by a client, it must be ignored.
+           NICK message is used to give user a nickname or change the previous
+           one.  The <hopcount> parameter is only used by servers to indicate
+           how far away a nick is from its home server.  A local connection has
+           a hopcount of 0.  If supplied by a client, it must be ignored.
 
-          If a NICK message arrives at a server which already knows about an
-          identical nickname for another client, a nickname collision occurs.
-          As a result of a nickname collision, all instances of the nickname
-          are removed from the server's database, and a KILL command is issued
-          to remove the nickname from all other server's database. If the NICK
-          message causing the collision was a nickname change, then the
-          original (old) nick must be removed as well.
+           If a NICK message arrives at a server which already knows about an
+           identical nickname for another client, a nickname collision occurs.
+           As a result of a nickname collision, all instances of the nickname
+           are removed from the server's database, and a KILL command is issued
+           to remove the nickname from all other server's database. If the NICK
+           message causing the collision was a nickname change, then the
+           original (old) nick must be removed as well.
 
-          If the server recieves an identical NICK from a client which is
-          directly connected, it may issue an ERR_NICKCOLLISION to the local
-          client, drop the NICK command, and not generate any kills.
+           If the server recieves an identical NICK from a client which is
+           directly connected, it may issue an ERR_NICKCOLLISION to the local
+           client, drop the NICK command, and not generate any kills.
 
-          Numeric Replies:
+           Numeric Replies:
 
-          ERR_NONICKNAMEGIVEN             ERR_ERRONEUSNICKNAME
-          ERR_NICKNAMEINUSE               ERR_NICKCOLLISION
+           ERR_NONICKNAMEGIVEN             ERR_ERRONEUSNICKNAME
+           ERR_NICKNAMEINUSE               ERR_NICKCOLLISION
 
-          Example:
+           Example:
 
-          NICK Wiz                        ; Introducing new nick "Wiz".
+           NICK Wiz                        ; Introducing new nick "Wiz".
 
-          :WiZ NICK Kilroy                ; WiZ changed his nickname to Kilroy.
+           :WiZ NICK Kilroy                ; WiZ changed his nickname to Kilroy.
 
         */
 
@@ -255,7 +259,6 @@ class CommandParser extends Writable {
       },
       SERVER: (args) => {
         /* RFC 1459 
-
            4.1.4 Server message         STATUS no implementation
 
            Command: SERVER
@@ -536,119 +539,119 @@ class CommandParser extends Writable {
                              ' :' + args.join(' ') + '\n');
       },
       MODE: (args) => {
-        /*
-          4.2.3 Mode message            STATUS incomplete PRIORITY
+        /* RFC 1459
+           4.2.3 Mode message           STATUS incomplete PRIORITY
 
-          Command: MODE
+           Command: MODE
 
-          The MODE command is a dual-purpose command in IRC.  It allows both
-          usernames and channels to have their mode changed.  The rationale for
-          this choice is that one day nicknames will be obsolete and the
-          equivalent property will be the channel.
+           The MODE command is a dual-purpose command in IRC.  It allows both
+           usernames and channels to have their mode changed.  The rationale for
+           this choice is that one day nicknames will be obsolete and the
+           equivalent property will be the channel.
 
-          When parsing MODE messages, it is recommended that the entire message
-          be parsed first and then the changes which resulted then passed on.
+           When parsing MODE messages, it is recommended that the entire message
+           be parsed first and then the changes which resulted then passed on.
 
-          4.2.3.1 Channel modes
+           4.2.3.1 Channel modes
 
-          Parameters: <channel> {[+|-]|o|p|s|i|t|n|b|v} [<limit>] [<user>]
-          [<ban mask>]
+           Parameters: <channel> {[+|-]|o|p|s|i|t|n|b|v} [<limit>] [<user>]
+           [<ban mask>]
 
-          The MODE command is provided so that channel operators may change the
-          characteristics of `their' channel.  It is also required that servers
-          be able to change channel modes so that channel operators may be
-          created.
+           The MODE command is provided so that channel operators may change the
+           characteristics of `their' channel.  It is also required that servers
+           be able to change channel modes so that channel operators may be
+           created.
 
-          The various modes available for channels are as follows:
+           The various modes available for channels are as follows:
 
-          o - give/take channel operator privileges;
-          p - private channel flag;
-          s - secret channel flag;
-          i - invite-only channel flag;
-          t - topic settable by channel operator only flag;
-          n - no messages to channel from clients on the outside;
-          m - moderated channel;
-          l - set the user limit to channel;
-          b - set a ban mask to keep users out;
-          v - give/take the ability to speak on a moderated channel;
-          k - set a channel key (password).
+           o - give/take channel operator privileges;
+           p - private channel flag;
+           s - secret channel flag;
+           i - invite-only channel flag;
+           t - topic settable by channel operator only flag;
+           n - no messages to channel from clients on the outside;
+           m - moderated channel;
+           l - set the user limit to channel;
+           b - set a ban mask to keep users out;
+           v - give/take the ability to speak on a moderated channel;
+           k - set a channel key (password).
 
-          When using the 'o' and 'b' options, a restriction on a total of three
-          per mode command has been imposed.  That is, any combination of 'o'
-          and
+           When using the 'o' and 'b' options, a restriction on a total of three
+           per mode command has been imposed.  That is, any combination of 'o'
+           and
 
-          4.2.3.2 User modes
+           4.2.3.2 User modes
 
-          Parameters: <nickname> {[+|-]|i|w|s|o}
+           Parameters: <nickname> {[+|-]|i|w|s|o}
 
-          The user MODEs are typically changes which affect either how the
-          client is seen by others or what 'extra' messages the client is sent.
-          A user MODE command may only be accepted if both the sender of the
-          message and the nickname given as a parameter are both the same.
+           The user MODEs are typically changes which affect either how the
+           client is seen by others or what 'extra' messages the client is sent.
+           A user MODE command may only be accepted if both the sender of the
+           message and the nickname given as a parameter are both the same.
 
-          The available modes are as follows:
+           The available modes are as follows:
 
-          i - marks a users as invisible;
-          s - marks a user for receipt of server notices;
-          w - user receives wallops;
-          o - operator flag.
+           i - marks a users as invisible;
+           s - marks a user for receipt of server notices;
+           w - user receives wallops;
+           o - operator flag.
 
-          Additional modes may be available later on.
+           Additional modes may be available later on.
 
-          If a user attempts to make themselves an operator using the "+o"
-          flag, the attempt should be ignored.  There is no restriction,
-          however, on anyone `deopping' themselves (using "-o").  Numeric
-          Replies:
+           If a user attempts to make themselves an operator using the "+o"
+           flag, the attempt should be ignored.  There is no restriction,
+           however, on anyone `deopping' themselves (using "-o").  Numeric
+           Replies:
 
-          ERR_NEEDMOREPARAMS              RPL_CHANNELMODEIS
-          ERR_CHANOPRIVSNEEDED            ERR_NOSUCHNICK
-          ERR_NOTONCHANNEL                ERR_KEYSET
-          RPL_BANLIST                     RPL_ENDOFBANLIST
-          ERR_UNKNOWNMODE                 ERR_NOSUCHCHANNEL
+           ERR_NEEDMOREPARAMS              RPL_CHANNELMODEIS
+           ERR_CHANOPRIVSNEEDED            ERR_NOSUCHNICK
+           ERR_NOTONCHANNEL                ERR_KEYSET
+           RPL_BANLIST                     RPL_ENDOFBANLIST
+           ERR_UNKNOWNMODE                 ERR_NOSUCHCHANNEL
 
-          ERR_USERSDONTMATCH              RPL_UMODEIS
-          ERR_UMODEUNKNOWNFLAG
+           ERR_USERSDONTMATCH              RPL_UMODEIS
+           ERR_UMODEUNKNOWNFLAG
 
-          Examples:
+           Examples:
 
-          Use of Channel Modes:
+           Use of Channel Modes:
 
-          MODE #Finnish +im               ; Makes #Finnish channel moderated and
-          'invite-only'.
+           MODE #Finnish +im               ; Makes #Finnish channel moderated and
+           'invite-only'.
 
-          MODE #Finnish +o Kilroy         ; Gives 'chanop' privileges to Kilroy on
-          channel #Finnish.
+           MODE #Finnish +o Kilroy         ; Gives 'chanop' privileges to Kilroy on
+           channel #Finnish.
 
-          MODE #Finnish +v Wiz            ; Allow WiZ to speak on #Finnish.
+           MODE #Finnish +v Wiz            ; Allow WiZ to speak on #Finnish.
 
-          MODE #Fins -s                   ; Removes 'secret' flag from channel
-          #Fins.
+           MODE #Fins -s                   ; Removes 'secret' flag from channel
+           #Fins.
 
-          MODE #42 +k oulu                ; Set the channel key to "oulu".
+           MODE #42 +k oulu                ; Set the channel key to "oulu".
 
-          MODE #eu-opers +l 10            ; Set the limit for the number of users
-          on channel to 10.
+           MODE #eu-opers +l 10            ; Set the limit for the number of users
+           on channel to 10.
 
-          MODE &oulu +b                   ; list ban masks set for channel.
+           MODE &oulu +b                   ; list ban masks set for channel.
 
-          MODE &oulu +b *!*@*             ; prevent all users from joining.
+           MODE &oulu +b *!*@*             ; prevent all users from joining.
 
-          MODE &oulu +b *!*@*.edu         ; prevent any user from a hostname
-          matching *.edu from joining.
+           MODE &oulu +b *!*@*.edu         ; prevent any user from a hostname
+           matching *.edu from joining.
 
-          Use of user Modes:
+           Use of user Modes:
 
-          :MODE WiZ -w                    ; turns reception of WALLOPS messages
-          off for WiZ.
+           :MODE WiZ -w                    ; turns reception of WALLOPS messages
+           off for WiZ.
 
-          :Angel MODE Angel +i            ; Message from Angel to make themselves
-          invisible.
+           :Angel MODE Angel +i            ; Message from Angel to make themselves
+           invisible.
 
-          MODE WiZ -o                     ; WiZ 'deopping' (removing operator
-          status).  The plain reverse of this
-          command ("MODE WiZ +o") must not be
-          allowed from users since would bypass
-          the OPER command.
+           MODE WiZ -o                     ; WiZ 'deopping' (removing operator
+           status).  The plain reverse of this
+           command ("MODE WiZ +o") must not be
+           allowed from users since would bypass
+           the OPER command.
         */
 
         //channel mode args[0] = channel (4.2.3.1)
@@ -656,31 +659,31 @@ class CommandParser extends Writable {
         return ':localhost 324 '+this.user.username+' '+args[0]+' +t';
       },
       TOPIC: (args) => {
-        /*RFC 1459 
-          4.2.4 Topic message           STATUS incomplete
+        /* RFC 1459 
+           4.2.4 Topic message          STATUS incomplete
 
-          Command: TOPIC
-          Parameters: <channel> [<topic>]
+           Command: TOPIC
+           Parameters: <channel> [<topic>]
 
-          The TOPIC message is used to change or view the topic of a channel.
-          The topic for channel <channel> is returned if there is no <topic>
-          given.  If the <topic> parameter is present, the topic for that
-          channel will be changed, if the channel modes permit this action.
+           The TOPIC message is used to change or view the topic of a channel.
+           The topic for channel <channel> is returned if there is no <topic>
+           given.  If the <topic> parameter is present, the topic for that
+           channel will be changed, if the channel modes permit this action.
 
-          Numeric Replies:
+           Numeric Replies:
 
-          ERR_NEEDMOREPARAMS              ERR_NOTONCHANNEL
-          RPL_NOTOPIC                     RPL_TOPIC
-          ERR_CHANOPRIVSNEEDED
+           ERR_NEEDMOREPARAMS              ERR_NOTONCHANNEL
+           RPL_NOTOPIC                     RPL_TOPIC
+           ERR_CHANOPRIVSNEEDED
 
-          Examples:
+           Examples:
 
-          :Wiz TOPIC #test :New topic     ;User Wiz setting the topic.
+           :Wiz TOPIC #test :New topic     ;User Wiz setting the topic.
 
-          TOPIC #test :another topic      ;set the topic on #test to "another
-          topic".
+           TOPIC #test :another topic      ;set the topic on #test to "another
+           topic".
 
-          TOPIC #test                     ; check the topic for #test.
+           TOPIC #test                     ; check the topic for #test.
         */
         var chan = args[0];
         var username = this.user.username;
@@ -688,7 +691,7 @@ class CommandParser extends Writable {
         return RPL_TOPIC_string;
       },
       NAMES: (args) => {
-        /* rfc 1459
+        /* RFC 1459
            4.2.5 Names message          STATUS incomplete multiple channels
 
            Command: NAMES
@@ -742,35 +745,35 @@ class CommandParser extends Writable {
 
       },
       LIST: (args) => {
-        /*
-          4.2.6 List message            STATUS incomplete multiple channels, server
+        /* RFC 1459
+           4.2.6 List message           STATUS incomplete multiple channels, server
 
-          Command: LIST
-          Parameters: [<channel>{,<channel>} [<server>]]
+           Command: LIST
+           Parameters: [<channel>{,<channel>} [<server>]]
 
-          The list message is used to list channels and their topics.  If  the
-          <channel>  parameter  is  used,  only  the  status  of  that  channel
-          is displayed.  Private  channels  are  listed  (without  their
-          topics)  as channel "Prv" unless the client generating the query is
-          actually on that channel.  Likewise, secret channels are not listed
-          at  all  unless  the client is a member of the channel in question.
+           The list message is used to list channels and their topics.  If  the
+           <channel>  parameter  is  used,  only  the  status  of  that  channel
+           is displayed.  Private  channels  are  listed  (without  their
+           topics)  as channel "Prv" unless the client generating the query is
+           actually on that channel.  Likewise, secret channels are not listed
+           at  all  unless  the client is a member of the channel in question.
 
-          Numeric Replies:
+           Numeric Replies:
 
-          ERR_NOSUCHSERVER                RPL_LISTSTART
-          RPL_LIST                        RPL_LISTEND
+           ERR_NOSUCHSERVER                RPL_LISTSTART
+           RPL_LIST                        RPL_LISTEND
 
-          Examples:
+           Examples:
 
-          LIST                            ; List all channels.
+           LIST                            ; List all channels.
 
-          LIST #twilight_zone,#42         ; List channels #twilight_zone and #42
+           LIST #twilight_zone,#42         ; List channels #twilight_zone and #42
         */
         var chanlist = Object.keys(channels).join('\n');
         return chanlist;
       },
       INVITE: (args) => {
-        /* rfc 1459
+        /* RFC 1459
            4.2.7 Invite message         STATUS not implemented
 
            Command: INVITE
@@ -803,45 +806,43 @@ class CommandParser extends Writable {
         return 'INVITE not yet implemented'
       },
       KICK: (args) => {
-        /*
+        /* RFC 1459
+           4.2.8 Kick command           STATUS not implemented
 
-          rfc 1459
-          4.2.8 Kick command            STATUS not implemented
+           Command: KICK
+           Parameters: <channel> <user> [<comment>]
 
-          Command: KICK
-          Parameters: <channel> <user> [<comment>]
+           The KICK command can be  used  to  forcibly  remove  a  user  from  a
+           channel.   It  'kicks  them  out'  of the channel (forced PART).
 
-          The KICK command can be  used  to  forcibly  remove  a  user  from  a
-          channel.   It  'kicks  them  out'  of the channel (forced PART).
+           Only a channel operator may kick another user out of a  channel.
+           Each  server that  receives  a KICK message checks that it is valid
+           (ie the sender is actually a  channel  operator)  before  removing
+           the  victim  from  the channel.
 
-          Only a channel operator may kick another user out of a  channel.
-          Each  server that  receives  a KICK message checks that it is valid
-          (ie the sender is actually a  channel  operator)  before  removing
-          the  victim  from  the channel.
+           Numeric Replies:
 
-          Numeric Replies:
+           ERR_NEEDMOREPARAMS              ERR_NOSUCHCHANNEL
+           ERR_BADCHANMASK                 ERR_CHANOPRIVSNEEDED
+           ERR_NOTONCHANNEL
 
-          ERR_NEEDMOREPARAMS              ERR_NOSUCHCHANNEL
-          ERR_BADCHANMASK                 ERR_CHANOPRIVSNEEDED
-          ERR_NOTONCHANNEL
+           Examples:
 
-          Examples:
+           KICK &Melbourne Matthew         ; Kick Matthew from &Melbourne
 
-          KICK &Melbourne Matthew         ; Kick Matthew from &Melbourne
+           KICK #Finnish John :Speaking English
+           ; Kick John from #Finnish using
+           "Speaking English" as the reason
+           (comment).
 
-          KICK #Finnish John :Speaking English
-          ; Kick John from #Finnish using
-          "Speaking English" as the reason
-          (comment).
+           :WiZ KICK #Finnish John         ; KICK message from WiZ to remove John
+           from channel #Finnish
 
-          :WiZ KICK #Finnish John         ; KICK message from WiZ to remove John
-          from channel #Finnish
+           NOTE:
+           It is possible to extend the KICK command parameters to the
+           following:
 
-          NOTE:
-          It is possible to extend the KICK command parameters to the
-          following:
-
-          <channel>{,<channel>} <user>{,<user>} [<comment>]
+           <channel>{,<channel>} <user>{,<user>} [<comment>]
 
         */
         
@@ -873,7 +874,6 @@ class CommandParser extends Writable {
         return 'RPL_VERSION node.js irc version 0.0.1 alpha';
       },
       STATS: (args) => {
-        
         /* RFC 1459
            4.3.2 Stats message          STATUS not implemented
 
@@ -938,59 +938,58 @@ class CommandParser extends Writable {
         return 'STATS not yet implemented';
       },
       LINKS: (args) => {
-        /*
-          4.3.3 Links message           STATUS not implemented
+        /* RFC 1459
+           4.3.3 Links message          STATUS not implemented
 
-          Command: LINKS
-          Parameters: [[<remote server>] <server mask>]
+           Command: LINKS
+           Parameters: [[<remote server>] <server mask>]
 
-          With LINKS, a user can list all servers which are known by the server
-          answering the query.  The returned list of servers must match the
-          mask, or if no mask is given, the full list is returned.
+           With LINKS, a user can list all servers which are known by the server
+           answering the query.  The returned list of servers must match the
+           mask, or if no mask is given, the full list is returned.
 
-          If <remote server> is given in addition to <server mask>, the LINKS
-          command is forwarded to the first server found that matches that name
-          (if any), and that server is then required to answer the query.
+           If <remote server> is given in addition to <server mask>, the LINKS
+           command is forwarded to the first server found that matches that name
+           (if any), and that server is then required to answer the query.
 
-          Numeric Replies:
+           Numeric Replies:
 
-          ERR_NOSUCHSERVER
-          RPL_LINKS                       RPL_ENDOFLINKS
+           ERR_NOSUCHSERVER
+           RPL_LINKS                       RPL_ENDOFLINKS
 
-          Examples:
+           Examples:
 
-          LINKS *.au                      ; list all servers which have a name
-          that matches *.au;
+           LINKS *.au                      ; list all servers which have a name
+           that matches *.au;
 
-          :WiZ LINKS *.bu.edu *.edu       ; LINKS message from WiZ to the first
-          server matching *.edu for a list of
-          servers matching *.bu.edu.
+           :WiZ LINKS *.bu.edu *.edu       ; LINKS message from WiZ to the first
+           server matching *.edu for a list of
+           servers matching *.bu.edu.
         */
         return 'LINKS not yet implemented';
       },
       TIME: (args) => {
+        /* RFC 1459
+           4.3.4 Time message           STATUS dummy implementation
 
-        /*
-          4.3.4 Time message            STATUS dummy implementation
+           Command: TIME
+           Parameters: [<server>]
 
-          Command: TIME
-          Parameters: [<server>]
+           The time message is used to query local time from the specified
+           server. If the server parameter is not given, the server handling the
+           command must reply to the query.
 
-          The time message is used to query local time from the specified
-          server. If the server parameter is not given, the server handling the
-          command must reply to the query.
+           Numeric Replies:
 
-          Numeric Replies:
+           ERR_NOSUCHSERVER                RPL_TIME
 
-          ERR_NOSUCHSERVER                RPL_TIME
+           Examples:
 
-          Examples:
+           TIME tolsun.oulu.fi             ; check the time on the server
+           "tolson.oulu.fi"
 
-          TIME tolsun.oulu.fi             ; check the time on the server
-          "tolson.oulu.fi"
-
-          Angel TIME *.au                 ; user angel checking the time on a
-          server matching "*.au"
+           Angel TIME *.au                 ; user angel checking the time on a
+           server matching "*.au"
 
         */
         return new Date().toString();
@@ -1026,80 +1025,79 @@ class CommandParser extends Writable {
         return 'CONNECT not yet implemented'
       },
       TRACE: (args) => {
+        /* RFC 1459
+           4.3.6 Trace message          STATUS not implemented
 
-        /*
-          4.3.6 Trace message           STATUS not implemented
+           Command: TRACE
+           Parameters: [<server>]
 
-          Command: TRACE
-          Parameters: [<server>]
+           TRACE command is used to find the route to specific server.  Each
+           server that processes this message must tell the sender about it by
+           sending a reply indicating it is a pass-through link, forming a chain
+           of replies similar to that gained from using "traceroute".  After
+           sending this reply back, it must then send the TRACE message to the
+           next server until given server is reached.  If the <server> parameter
+           is omitted, it is recommended that TRACE command send a message to
+           the sender telling which servers the current server has direct
+           connection to.
 
-          TRACE command is used to find the route to specific server.  Each
-          server that processes this message must tell the sender about it by
-          sending a reply indicating it is a pass-through link, forming a chain
-          of replies similar to that gained from using "traceroute".  After
-          sending this reply back, it must then send the TRACE message to the
-          next server until given server is reached.  If the <server> parameter
-          is omitted, it is recommended that TRACE command send a message to
-          the sender telling which servers the current server has direct
-          connection to.
+           If the destination given by "<server>" is an actual server, then the
+           destination server is required to report all servers and users which
+           are connected to it, although only operators are permitted to see
+           users present.  If the destination given by <server> is a nickname,
+           they only a reply for that nickname is given.
 
-          If the destination given by "<server>" is an actual server, then the
-          destination server is required to report all servers and users which
-          are connected to it, although only operators are permitted to see
-          users present.  If the destination given by <server> is a nickname,
-          they only a reply for that nickname is given.
+           Numeric Replies:
 
-          Numeric Replies:
+           ERR_NOSUCHSERVER
 
-          ERR_NOSUCHSERVER
+           If the TRACE message is destined for another server, all intermediate
+           servers must return a RPL_TRACELINK reply to indicate that the TRACE
+           passed through it and where its going next.
 
-          If the TRACE message is destined for another server, all intermediate
-          servers must return a RPL_TRACELINK reply to indicate that the TRACE
-          passed through it and where its going next.
+           RPL_TRACELINK
+           A TRACE reply may be composed of any number of the following numeric
+           replies.
 
-          RPL_TRACELINK
-          A TRACE reply may be composed of any number of the following numeric
-          replies.
+           RPL_TRACECONNECTING             RPL_TRACEHANDSHAKE
+           RPL_TRACEUNKNOWN                RPL_TRACEOPERATOR
+           RPL_TRACEUSER                   RPL_TRACESERVER
+           RPL_TRACESERVICE                RPL_TRACENEWTYPE
+           RPL_TRACECLASS
 
-          RPL_TRACECONNECTING             RPL_TRACEHANDSHAKE
-          RPL_TRACEUNKNOWN                RPL_TRACEOPERATOR
-          RPL_TRACEUSER                   RPL_TRACESERVER
-          RPL_TRACESERVICE                RPL_TRACENEWTYPE
-          RPL_TRACECLASS
+           Examples:
 
-          Examples:
+           TRACE *.oulu.fi                 ; TRACE to a server matching *.oulu.fi
 
-          TRACE *.oulu.fi                 ; TRACE to a server matching *.oulu.fi
-
-          :WiZ TRACE AngelDust            ; TRACE issued by WiZ to nick AngelDust
+           :WiZ TRACE AngelDust            ; TRACE issued by WiZ to nick AngelDust
         */
         return 'TRACE not yet implemented'
       },
       ADMIN: (args) => {
-        /*
-          4.3.7 Admin command           STATUS not implemented
+        /* RFC 1459
+           4.3.7 Admin command          STATUS not implemented
 
-          Command: ADMIN
-          Parameters: [<server>]
+           Command: ADMIN
+           Parameters: [<server>]
 
-          The admin message is used to find the name of the administrator of
-          the given server, or current server if <server> parameter is omitted.
-          Each server must have the ability to forward ADMIN messages to other
-          servers.
+           The admin message is used to find the name of the administrator of
+           the given server, or current server if <server> parameter is omitted.
+           Each server must have the ability to forward ADMIN messages to other
+           servers.
 
-          Numeric Replies:
+           Numeric Replies:
 
-          ERR_NOSUCHSERVER
-          RPL_ADMINME                     RPL_ADMINLOC1
-          RPL_ADMINLOC2                   RPL_ADMINEMAIL
+           ERR_NOSUCHSERVER
+           RPL_ADMINME                     RPL_ADMINLOC1
+           RPL_ADMINLOC2                   RPL_ADMINEMAIL
 
-          Examples:
+           Examples:
 
-          ADMIN tolsun.oulu.fi            ; request an ADMIN reply from
-          tolsun.oulu.fi
+           ADMIN tolsun.oulu.fi            ; request an ADMIN reply from
+           tolsun.oulu.fi
 
-          :WiZ ADMIN *.edu                ; ADMIN request from WiZ for first
-          server found to match *.edu.
+           :WiZ ADMIN *.edu                ; ADMIN request from WiZ for first
+           server found to match *.edu.
         */
         return 'ADMIN not yet implemented'
       },
@@ -1133,62 +1131,62 @@ class CommandParser extends Writable {
         return 'INFO not yet implemented';
       },
       PRIVMSG: (args) => {
-        /*
-          4.4 Sending messages
+        /* RFC 1459
+           4.4 Sending messages
 
-          The main purpose of the IRC protocol is to provide a base for clients
-          to communicate with each other.  PRIVMSG and NOTICE are the only
-          messages available which actually perform delivery of a text message
-          from one client to another - the rest just make it possible and try
-          to ensure it happens in a reliable and structured manner.
+           The main purpose of the IRC protocol is to provide a base for clients
+           to communicate with each other.  PRIVMSG and NOTICE are the only
+           messages available which actually perform delivery of a text message
+           from one client to another - the rest just make it possible and try
+           to ensure it happens in a reliable and structured manner.
         */
-        /*
-          4.4.1 Private messages        STATUS incomplete error handling
+        /* RFC 1459
+           4.4.1 Private messages       STATUS incomplete error handling
 
-          Command: PRIVMSG
-          Parameters: <receiver>{,<receiver>} <text to be sent>
+           Command: PRIVMSG
+           Parameters: <receiver>{,<receiver>} <text to be sent>
 
-          PRIVMSG is used to send private messages between users.  <receiver>
-          is the nickname of the receiver of the message.  <receiver> can also
-          be a list of names or channels separated with commas.
+           PRIVMSG is used to send private messages between users.  <receiver>
+           is the nickname of the receiver of the message.  <receiver> can also
+           be a list of names or channels separated with commas.
 
-          The <receiver> parameter may also me a host mask  (#mask)  or  server
-          mask  ($mask).   In  both cases the server will only send the PRIVMSG
-          to those who have a server or host matching the mask.  The mask  must
-          have at  least  1  (one)  "."  in it and no wildcards following the
-          last ".".  This requirement exists to prevent people sending messages
-          to  "#*"  or "$*",  which  would  broadcast  to  all  users; from
-          experience, this is abused more than used responsibly and properly.
-          Wildcards are  the  '*' and  '?'   characters.   This  extension  to
-          the PRIVMSG command is only available to Operators.
+           The <receiver> parameter may also me a host mask  (#mask)  or  server
+           mask  ($mask).   In  both cases the server will only send the PRIVMSG
+           to those who have a server or host matching the mask.  The mask  must
+           have at  least  1  (one)  "."  in it and no wildcards following the
+           last ".".  This requirement exists to prevent people sending messages
+           to  "#*"  or "$*",  which  would  broadcast  to  all  users; from
+           experience, this is abused more than used responsibly and properly.
+           Wildcards are  the  '*' and  '?'   characters.   This  extension  to
+           the PRIVMSG command is only available to Operators.
 
-          Numeric Replies:
+           Numeric Replies:
 
-          ERR_NORECIPIENT                 ERR_NOTEXTTOSEND
-          ERR_CANNOTSENDTOCHAN            ERR_NOTOPLEVEL
-          ERR_WILDTOPLEVEL                ERR_TOOMANYTARGETS
-          ERR_NOSUCHNICK
-          RPL_AWAY
+           ERR_NORECIPIENT                 ERR_NOTEXTTOSEND
+           ERR_CANNOTSENDTOCHAN            ERR_NOTOPLEVEL
+           ERR_WILDTOPLEVEL                ERR_TOOMANYTARGETS
+           ERR_NOSUCHNICK
+           RPL_AWAY
 
-          Examples:
+           Examples:
 
-          :Angel PRIVMSG Wiz :Hello are you receiving this message ?
-          ; Message from Angel to Wiz.
+           :Angel PRIVMSG Wiz :Hello are you receiving this message ?
+           ; Message from Angel to Wiz.
 
-          PRIVMSG Angel :yes I'm receiving it !receiving it !'u>(768u+1n) .br ;
-          Message to Angel.
+           PRIVMSG Angel :yes I'm receiving it !receiving it !'u>(768u+1n) .br ;
+           Message to Angel.
 
-          PRIVMSG jto@tolsun.oulu.fi :Hello !
-          ; Message to a client on server
-          tolsun.oulu.fi with username of "jto".
+           PRIVMSG jto@tolsun.oulu.fi :Hello !
+           ; Message to a client on server
+           tolsun.oulu.fi with username of "jto".
 
-          PRIVMSG $*.fi :Server tolsun.oulu.fi rebooting.
-          ; Message to everyone on a server which
-          has a name matching *.fi.
+           PRIVMSG $*.fi :Server tolsun.oulu.fi rebooting.
+           ; Message to everyone on a server which
+           has a name matching *.fi.
 
-          PRIVMSG #*.edu :NSFNet is undergoing work, expect interruptions
-          ; Message to all users who come from a
-          host which has a name matching *.edu.
+           PRIVMSG #*.edu :NSFNet is undergoing work, expect interruptions
+           ; Message to all users who come from a
+           host which has a name matching *.edu.
         */
         var chan = args.shift();
 
@@ -1213,24 +1211,24 @@ class CommandParser extends Writable {
       },
       NOTICE: (args) => {
 
-        /*
-          4.4.2 Notice                  STATUS incomplete error handling
+        /* RFC 1459
+           4.4.2 Notice                 STATUS incomplete error handling
 
-          Command: NOTICE
-          Parameters: <nickname> <text>
+           Command: NOTICE
+           Parameters: <nickname> <text>
 
-          The NOTICE message is used similarly to PRIVMSG.  The difference
-          between NOTICE and PRIVMSG is that automatic replies must never be
-          sent in response to a NOTICE message.  This rule applies to servers
-          too - they must not send any error reply back to the client on
-          receipt of a notice.  The object of this rule is to avoid loops
-          between a client automatically sending something in response to
-          something it received.  This is typically used by automatons (clients
-          with either an AI or other interactive program controlling their
-          actions) which are always seen to be replying lest they end up in a
-          loop with another automaton.
+           The NOTICE message is used similarly to PRIVMSG.  The difference
+           between NOTICE and PRIVMSG is that automatic replies must never be
+           sent in response to a NOTICE message.  This rule applies to servers
+           too - they must not send any error reply back to the client on
+           receipt of a notice.  The object of this rule is to avoid loops
+           between a client automatically sending something in response to
+           something it received.  This is typically used by automatons (clients
+           with either an AI or other interactive program controlling their
+           actions) which are always seen to be replying lest they end up in a
+           loop with another automaton.
 
-          See PRIVMSG for more details on replies and examples.
+           See PRIVMSG for more details on replies and examples.
 
 
         */
@@ -1294,169 +1292,167 @@ class CommandParser extends Writable {
         return userlist;
       },
       WHOIS: (args) => {
-        /*
-          4.5.2 Whois query             STATUS no implementation
+        /* RFC 1459
+           4.5.2 Whois query            STATUS no implementation
 
-          Command: WHOIS
-          Parameters: [<server>] <nickmask>[,<nickmask>[,...]]
+           Command: WHOIS
+           Parameters: [<server>] <nickmask>[,<nickmask>[,...]]
 
-          This message is used to query information about particular user.  The
-          server will answer this message with several numeric messages
-          indicating different statuses of each user which matches the nickmask
-          (if you are entitled to see them).  If no wildcard is present in the
-          <nickmask>, any information about that nick which you are allowed to
-          see is presented.  A comma (',') separated list of nicknames may be
-          given.
+           This message is used to query information about particular user.  The
+           server will answer this message with several numeric messages
+           indicating different statuses of each user which matches the nickmask
+           (if you are entitled to see them).  If no wildcard is present in the
+           <nickmask>, any information about that nick which you are allowed to
+           see is presented.  A comma (',') separated list of nicknames may be
+           given.
 
-          The latter version sends the query to a specific server.  It is
-          useful if you want to know how long the user in question has been
-          idle as only local server (ie. the server the user is directly
-          connected to) knows that information, while everything else is
-          globally known.
+           The latter version sends the query to a specific server.  It is
+           useful if you want to know how long the user in question has been
+           idle as only local server (ie. the server the user is directly
+           connected to) knows that information, while everything else is
+           globally known.
 
-          Numeric Replies:
+           Numeric Replies:
 
-          ERR_NOSUCHSERVER                ERR_NONICKNAMEGIVEN
-          RPL_WHOISUSER                   RPL_WHOISCHANNELS
-          RPL_WHOISCHANNELS               RPL_WHOISSERVER
-          RPL_AWAY                        RPL_WHOISOPERATOR
-          RPL_WHOISIDLE                   ERR_NOSUCHNICK
-          RPL_ENDOFWHOIS
+           ERR_NOSUCHSERVER                ERR_NONICKNAMEGIVEN
+           RPL_WHOISUSER                   RPL_WHOISCHANNELS
+           RPL_WHOISCHANNELS               RPL_WHOISSERVER
+           RPL_AWAY                        RPL_WHOISOPERATOR
+           RPL_WHOISIDLE                   ERR_NOSUCHNICK
+           RPL_ENDOFWHOIS
 
-          Examples:
+           Examples:
 
-          WHOIS wiz                       ; return available user information
-          about nick WiZ
+           WHOIS wiz                       ; return available user information
+           about nick WiZ
 
-          WHOIS eff.org trillian          ; ask server eff.org for user
-          information about trillian
+           WHOIS eff.org trillian          ; ask server eff.org for user
+           information about trillian
         */
         return 'WHOIS not yet implemented'
       },
       WHOWAS: (args) => {
-        /*
-          4.5.3 Whowas                  STATUS not yet implemented
+        /* RFC 1459
+           4.5.3 Whowas                 STATUS not yet implemented
 
-          Command: WHOWAS
-          Parameters: <nickname> [<count> [<server>]]
+           Command: WHOWAS
+           Parameters: <nickname> [<count> [<server>]]
 
-          Whowas asks for information about a nickname which no longer exists.
-          This may either be due to a nickname change or the user leaving IRC.
-          In response to this query, the server searches through its nickname
-          history, looking for any nicks which are lexically the same (no wild
-          card matching here).  The history is searched backward, returning the
-          most recent entry first.  If there are multiple entries, up to
-          <count> replies will be returned (or all of them if no <count>
-          parameter is given).  If a non-positive number is passed as being
-          <count>, then a full search is done.
+           Whowas asks for information about a nickname which no longer exists.
+           This may either be due to a nickname change or the user leaving IRC.
+           In response to this query, the server searches through its nickname
+           history, looking for any nicks which are lexically the same (no wild
+           card matching here).  The history is searched backward, returning the
+           most recent entry first.  If there are multiple entries, up to
+           <count> replies will be returned (or all of them if no <count>
+           parameter is given).  If a non-positive number is passed as being
+           <count>, then a full search is done.
 
-          Numeric Replies:
+           Numeric Replies:
 
-          ERR_NONICKNAMEGIVEN             ERR_WASNOSUCHNICK
-          RPL_WHOWASUSER                  RPL_WHOISSERVER
-          RPL_ENDOFWHOWAS
+           ERR_NONICKNAMEGIVEN             ERR_WASNOSUCHNICK
+           RPL_WHOWASUSER                  RPL_WHOISSERVER
+           RPL_ENDOFWHOWAS
 
-          Examples:
+           Examples:
 
-          WHOWAS Wiz                      ; return all information in the nick
-          history about nick "WiZ";
+           WHOWAS Wiz                      ; return all information in the nick
+           history about nick "WiZ";
 
-          WHOWAS Mermaid 9                ; return at most, the 9 most recent
-          entries in the nick history for
-          "Mermaid";
+           WHOWAS Mermaid 9                ; return at most, the 9 most recent
+           entries in the nick history for
+           "Mermaid";
 
-          WHOWAS Trillian 1 *.edu         ; return the most recent history for
-          "Trillian" from the first server found
-          to match "*.edu".
+           WHOWAS Trillian 1 *.edu         ; return the most recent history for
+           "Trillian" from the first server found
+           to match "*.edu".
         */
 
         return 'WHOWAS not yet implemented'
       },
       KILL: (args) => {
-        /*
+        /* RFC 1459
+           4.6.1 Kill message           STATUS not implemented
 
-          4.6.1 Kill message            STATUS not implemented
+           Command: KILL
+           Parameters: <nickname> <comment>
 
-          Command: KILL
-          Parameters: <nickname> <comment>
+           The KILL message is used to cause a client-server connection to be
+           closed by the server which has the actual connection.  KILL is used
+           by servers when they encounter a duplicate entry in the list of valid
+           nicknames and is used to remove both entries.  It is also available
+           to operators.
 
-          The KILL message is used to cause a client-server connection to be
-          closed by the server which has the actual connection.  KILL is used
-          by servers when they encounter a duplicate entry in the list of valid
-          nicknames and is used to remove both entries.  It is also available
-          to operators.
+           Clients which have automatic reconnect algorithms effectively make
+           this command useless since the disconnection is only brief.  It does
+           however break the flow of data and can be used to stop large amounts
+           of being abused, any user may elect to receive KILL messages
+           generated for others to keep an 'eye' on would be trouble spots.
 
-          Clients which have automatic reconnect algorithms effectively make
-          this command useless since the disconnection is only brief.  It does
-          however break the flow of data and can be used to stop large amounts
-          of being abused, any user may elect to receive KILL messages
-          generated for others to keep an 'eye' on would be trouble spots.
+           In an arena where nicknames are required to be globally unique at all
+           times, KILL messages are sent whenever 'duplicates' are detected
+           (that is an attempt to register two users with the same nickname) in
+           the hope that both of them will disappear and only 1 reappear.
 
-          In an arena where nicknames are required to be globally unique at all
-          times, KILL messages are sent whenever 'duplicates' are detected
-          (that is an attempt to register two users with the same nickname) in
-          the hope that both of them will disappear and only 1 reappear.
+           The comment given must reflect the actual reason for the KILL.  For
+           server-generated KILLs it usually is made up of details concerning
+           the origins of the two conflicting nicknames.  For users it is left
+           up to them to provide an adequate reason to satisfy others who see
+           it.  To prevent/discourage fake KILLs from being generated to hide
+           the identify of the KILLer, the comment also shows a 'kill-path'
+           which is updated by each server it passes through, each prepending
+           its name to the path.
 
-          The comment given must reflect the actual reason for the KILL.  For
-          server-generated KILLs it usually is made up of details concerning
-          the origins of the two conflicting nicknames.  For users it is left
-          up to them to provide an adequate reason to satisfy others who see
-          it.  To prevent/discourage fake KILLs from being generated to hide
-          the identify of the KILLer, the comment also shows a 'kill-path'
-          which is updated by each server it passes through, each prepending
-          its name to the path.
+           Numeric Replies:
 
-          Numeric Replies:
-
-          ERR_NOPRIVILEGES                ERR_NEEDMOREPARAMS
-          ERR_NOSUCHNICK                  ERR_CANTKILLSERVER
-
-
-          KILL David (csd.bu.edu <- tolsun.oulu.fi)
-          ; Nickname collision between csd.bu.edu
-          and tolson.oulu.fi
+           ERR_NOPRIVILEGES                ERR_NEEDMOREPARAMS
+           ERR_NOSUCHNICK                  ERR_CANTKILLSERVER
 
 
-          NOTE:
-          It is recommended that only Operators be allowed to kill other users
-          with KILL message.  In an ideal world not even operators would need
-          to do this and it would be left to servers to deal with.
+           KILL David (csd.bu.edu <- tolsun.oulu.fi)
+           ; Nickname collision between csd.bu.edu
+           and tolson.oulu.fi
+
+
+           NOTE:
+           It is recommended that only Operators be allowed to kill other users
+           with KILL message.  In an ideal world not even operators would need
+           to do this and it would be left to servers to deal with.
         */
         return 'KILL not yet implemented';
       },
       PING: (args) => {
-        /*
+        /* RFC 1459
+           4.6.2 Ping message           STATUS dummy implementation
 
-          4.6.2 Ping message            STATUS dummy implementation
+           Command: PING
+           Parameters: <server1> [<server2>]
 
-          Command: PING
-          Parameters: <server1> [<server2>]
+           The PING message is used to test the presence of an active client at
+           the other end of the connection.  A PING message is sent at regular
+           intervals if no other activity detected coming from a connection.  If
+           a connection fails to respond to a PING command within a set amount
+           of time, that connection is closed.
 
-          The PING message is used to test the presence of an active client at
-          the other end of the connection.  A PING message is sent at regular
-          intervals if no other activity detected coming from a connection.  If
-          a connection fails to respond to a PING command within a set amount
-          of time, that connection is closed.
+           Any client which receives a PING message must respond to <server1>
+           (server which sent the PING message out) as quickly as possible with
+           an appropriate PONG message to indicate it is still there and alive.
+           Servers should not respond to PING commands but rely on PINGs from
+           the other end of the connection to indicate the connection is alive.
+           If the <server2> parameter is specified, the PING message gets
+           forwarded there.
 
-          Any client which receives a PING message must respond to <server1>
-          (server which sent the PING message out) as quickly as possible with
-          an appropriate PONG message to indicate it is still there and alive.
-          Servers should not respond to PING commands but rely on PINGs from
-          the other end of the connection to indicate the connection is alive.
-          If the <server2> parameter is specified, the PING message gets
-          forwarded there.
+           Numeric Replies:
 
-          Numeric Replies:
+           ERR_NOORIGIN                    ERR_NOSUCHSERVER
 
-          ERR_NOORIGIN                    ERR_NOSUCHSERVER
+           Examples:
 
-          Examples:
+           PING tolsun.oulu.fi             ; server sending a PING message to
+           another server to indicate it is still
+           alive.
 
-          PING tolsun.oulu.fi             ; server sending a PING message to
-          another server to indicate it is still
-          alive.
-
-          PING WiZ                        ; PING message being sent to nick WiZ
+           PING WiZ                        ; PING message being sent to nick WiZ
         */
         console.log('PING', args);
         var dest = args[1];
@@ -1468,62 +1464,62 @@ class CommandParser extends Writable {
         return ':localhost PONG';
       },
       PONG: (args) => {
-        /*
-          4.6.3 Pong message            STATUS dummy implementation
+        /* RFC 1459
+           4.6.3 Pong message           STATUS dummy implementation
 
-          Command: PONG
-          Parameters: <daemon> [<daemon2>]
+           Command: PONG
+           Parameters: <daemon> [<daemon2>]
 
-          PONG message is a reply to ping message.  If parameter <daemon2> is
-          given this message must be forwarded to given daemon.  The <daemon>
-          parameter is the name of the daemon who has responded to PING message
-          and generated this message.
+           PONG message is a reply to ping message.  If parameter <daemon2> is
+           given this message must be forwarded to given daemon.  The <daemon>
+           parameter is the name of the daemon who has responded to PING message
+           and generated this message.
 
-          Numeric Replies:
+           Numeric Replies:
 
-          ERR_NOORIGIN                    ERR_NOSUCHSERVER
+           ERR_NOORIGIN                    ERR_NOSUCHSERVER
 
-          Examples:
+           Examples:
 
-          PONG csd.bu.edu tolsun.oulu.fi  ; PONG message from csd.bu.edu to
-          tolsun.oulu.fi
+           PONG csd.bu.edu tolsun.oulu.fi  ; PONG message from csd.bu.edu to
+           tolsun.oulu.fi
         */
         console.log('PONG', args);
         return ':localhost NOTICE * PONG? PING!';
       },
       ERROR: (args) => {
-        /*
-          4.6.4 Error                   STATUS not implemented
+        /* RFC 1459
+           4.6.4 Error                  STATUS not implemented
 
-          Command: ERROR
-          Parameters: <error message>
+           Command: ERROR
+           Parameters: <error message>
 
-          The ERROR command is for use by servers when reporting a serious or
-          fatal error to its operators.  It may also be sent from one server to
-          another but must not be accepted from any normal unknown clients.
+           The ERROR command is for use by servers when reporting a serious or
+           fatal error to its operators.  It may also be sent from one server to
+           another but must not be accepted from any normal unknown clients.
 
-          An ERROR message is for use for reporting errors which occur with a
-          server-to-server link only.  An ERROR message is sent to the server
-          at the other end (which sends it to all of its connected operators)
-          and to all operators currently connected.  It is not to be passed
-          onto any other servers by a server if it is received from a server.
+           An ERROR message is for use for reporting errors which occur with a
+           server-to-server link only.  An ERROR message is sent to the server
+           at the other end (which sends it to all of its connected operators)
+           and to all operators currently connected.  It is not to be passed
+           onto any other servers by a server if it is received from a server.
 
-          When a server sends a received ERROR message to its operators, the
-          message should be encapsulated inside a NOTICE message, indicating
-          that the client was not responsible for the error.
+           When a server sends a received ERROR message to its operators, the
+           message should be encapsulated inside a NOTICE message, indicating
+           that the client was not responsible for the error.
 
-          Numerics:
+           Numerics:
 
-          None.
+           None.
 
-          Examples:
+           Examples:
 
-          ERROR :Server *.fi already exists; ERROR message to the other server
-          which caused this error.
+           ERROR :Server *.fi already exists; ERROR message to the other server
+           which caused this error.
 
-          NOTICE WiZ :ERROR from csd.bu.edu -- Server *.fi already exists
-          ; Same ERROR message as above but sent
-          to user WiZ on the other server.
+           NOTICE WiZ :ERROR from csd.bu.edu -- Server *.fi already exists
+           ; Same ERROR message as above but sent
+           to user WiZ on the other server.
         */
         return 'ERROR not yet implemented';
       }
