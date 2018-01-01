@@ -103,11 +103,12 @@ class CommandParser extends Writable {
     super(opts)
     this.socket = sock;
     this.user = null;
+    this.id = 'unregistered'
 
     this.command_list = {
       PASS: (args) => {
         /* RFC 1459
-           4.1.1 Password message       STATUS no implementation
+           4.1.1 Password message       STATUS incomplete :always responds error
 
            Command: PASS
            Parameters: <password>
@@ -130,11 +131,11 @@ class CommandParser extends Writable {
            PASS secretpasswordhere
 
         */
-        return 'PASS not yet implemented';
+        return this.createError('ERR_NEEDMOREPARAMS');
       },
       NICK: (args) => {
         /* RFC 1459
-           4.1.2 Nick message           STATUS incomplete
+           4.1.2 Nick message           STATUS incomplete :ERRONEOUSNICKNAME, NICKCOLLISION
 
            Command: NICK
            Parameters: <nickname> [ <hopcount> ]
@@ -170,12 +171,12 @@ class CommandParser extends Writable {
         */
 
         if( args.length < 1 )
-          return 'ERR_NONICKNAMEGIVEN';
+          return this.createError('ERR_NONICKNAMEGIVEN',null,this.id);
 
         var new_name = args[0];
 
         if( users[new_name] ) {
-          return 'ERR_NICKNAMEINUSE';
+          return this.createError('ERR_NICKNAMEINUSE',null,this.id);
         }
 
         var old_name = new_name;
@@ -185,12 +186,13 @@ class CommandParser extends Writable {
           users[new_name] = this.user;
           delete users[old_name];
         }
+        this.id = new_name;
 
         return [':'+old_name,'NICK',new_name].join(' ');
       },
       USER: (args) => {
         /* RFC 1459 
-           4.1.3 User message           STATUS incomplete
+           4.1.3 User message           STATUS compliant
 
            Command: USER
            Parameters: <username> <hostname> <servername> <realname>
@@ -239,20 +241,26 @@ class CommandParser extends Writable {
 
         */
         if( args.length < 4 )
-          return 'ERR_NEEDMOREPARAMS'
+          return this.createError('ERR_NEEDMOREPARAMS',null,this.id);
         
         var username = args.shift();
         var mode = args.shift();
         var unused = args.shift();
         var real_name = args.join(' ').slice(1).trim();
 
+        //is this connection already registered?
+        if( this.user ){
+          return this.createError('ERR_ALREADYREGISTRED',null,this.id);
+        }
+
         //does username exist?
-        if( this.user || users[username] ){
-          return 'ERR_ALREADYREGISTERED'
+        if( users[username] ) {
+          return this.createError('ERR_NICKNAMEINUSE',null,this.id);
         }
 
         this.user = new PassThrough();
         this.user.username = username;
+        this.id = username;
         users[username] = this.user
 
         prepareSocket(this.user);
@@ -267,13 +275,16 @@ class CommandParser extends Writable {
           }
         });
 
-        var str_001 = [ ':localhost 001',
+        var str_001 = [ ':'+server_string,
+                        '001',
                         username,
                         ':Welcome to localhost irc server!'].join(' ');
-        var str_002 = [ ':localhost 002',
+        var str_002 = [ ':'+server_string,
+                        '002',
                         username,
                         ':Your host is localhost' ].join(' ');
-        var str_003 = [ ':localhost 003',
+        var str_003 = [ ':'+server_string,
+                        '003',
                         username,
                         ':This server was created a while back'].join(' ');
 
@@ -395,10 +406,7 @@ class CommandParser extends Writable {
 
            QUIT :Gone to have lunch        ; Preferred message format.
         */
-        var username = 'unregistered'
-        if( this.user )
-          username = this.user.username;
-
+        var username = this.id
         console.log(username, 'QUIT', args.join(' '));
         this.socket.end();
       },
@@ -1550,16 +1558,16 @@ class CommandParser extends Writable {
 
   }
 
-  createError(err_name, message) {
+  createError(err_name, message, name) {
     var err_code = lookup[err_name] || 400;
     var err_message = message ||
         ( err_codes[err_code] ?
           err_codes[err_code].message :
           'Error unknown');
 
-    var err_uname = '';
+    var err_uname = name;
 
-    if( this.user && this.user.username )
+    if( !err_uname ) if( this.user && this.user.username )
       err_uname = this.user.username;
     else
       return ':'+server_string+' 400 unregistered :Please Register'
