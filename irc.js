@@ -342,7 +342,7 @@ class CommandParser extends Writable {
            for csd.bu.edu which is 5 hops away.
 
         */
-        return 'SEVRER not yet implemented';
+        return this.createError(400, 'SEVRER not yet implemented');
       },
       OPER: (args) => {
         /* RFC 1459 
@@ -372,7 +372,7 @@ class CommandParser extends Writable {
            using a username of "foo" and "bar" as
            the password.
         */
-        return 'OPER not yet implemented';
+        return this.createError(400, 'OPER not yet implemented');
       },
       QUIT: (args) => {
         /* RFC 1459
@@ -466,7 +466,7 @@ class CommandParser extends Writable {
            "cm22.eng.umd.edu" from the net
            because "Server out of control".
         */
-        return 'SQUIT not yet implemented';
+        return this.createError(400, 'SQUIT not yet implemented');
       },
       JOIN: (args) => {
         /* RFC 1459
@@ -833,7 +833,7 @@ class CommandParser extends Writable {
            #Twilight_zone
 
         */
-        return 'INVITE not yet implemented'
+        return this.createError(400, 'INVITE not yet implemented');
       },
       KICK: (args) => {
         /* RFC 1459
@@ -876,7 +876,7 @@ class CommandParser extends Writable {
 
         */
         
-        return 'KICK not yet implemented'
+        return this.createError(400, 'KICK not yet implemented');
       },
       VERSION: (args) => {
         /* RFC 1459
@@ -966,7 +966,7 @@ class CommandParser extends Writable {
            :Wiz STATS c eff.org            ; request by WiZ for C/N line
            information from server eff.org
         */
-        return 'STATS not yet implemented';
+        return this.createError(400, 'STATS not yet implemented');
       },
       LINKS: (args) => {
         /* RFC 1459
@@ -997,7 +997,7 @@ class CommandParser extends Writable {
            server matching *.edu for a list of
            servers matching *.bu.edu.
         */
-        return 'LINKS not yet implemented';
+        return this.createError(400, 'LINKS not yet implemented');
       },
       TIME: (args) => {
         /* RFC 1459
@@ -1053,7 +1053,7 @@ class CommandParser extends Writable {
            eff.org and csd.bu.edu connected on port
            6667.
         */
-        return 'CONNECT not yet implemented'
+        return this.createError(400, 'CONNECT not yet implemented');
       },
       TRACE: (args) => {
         /* RFC 1459
@@ -1102,7 +1102,7 @@ class CommandParser extends Writable {
 
            :WiZ TRACE AngelDust            ; TRACE issued by WiZ to nick AngelDust
         */
-        return 'TRACE not yet implemented'
+        return this.createError(400, 'TRACE not yet implemented');
       },
       ADMIN: (args) => {
         /* RFC 1459
@@ -1130,7 +1130,7 @@ class CommandParser extends Writable {
            :WiZ ADMIN *.edu                ; ADMIN request from WiZ for first
            server found to match *.edu.
         */
-        return 'ADMIN not yet implemented'
+        return this.createError(400, 'ADMIN not yet implemented');
       },
       INFO: (args) => {
         /* RFC 1459
@@ -1159,7 +1159,7 @@ class CommandParser extends Writable {
            INFO Angel                      ; request info from the server that
            Angel is connected to.
         */
-        return 'INFO not yet implemented';
+        return this.createError(400, 'INFO not yet implemented');
       },
       PRIVMSG: (args) => {
         /* RFC 1459
@@ -1222,7 +1222,7 @@ class CommandParser extends Writable {
         var chan = args.shift();
 
         if( !this.user )
-          return 'please register!';
+          return this.createError(400, 'please register!');
 
         var destination = fetchChannel(chan);
 
@@ -1237,7 +1237,7 @@ class CommandParser extends Writable {
           destination.write(msg.join(' '));
         } else {
           console.log(chan, args);
-          return 'no such user or channel';
+          return this.createError(400, 'no such user or channel');
         }
       },
       NOTICE: (args) => {
@@ -1266,7 +1266,7 @@ class CommandParser extends Writable {
         var chan = args.shift();
 
         if( !this.user )
-          return 'please register!';
+          return this.createError(400, 'please register!');
 
         var destination = fetchChannel(chan);
 
@@ -1281,7 +1281,7 @@ class CommandParser extends Writable {
           destination.write(msg.join(' '));
         } else {
           console.log(chan, args);
-          return 'no such user or channel';
+          return this.createError(400, 'no such user or channel');
         }
       },
       WHO: (args) => {
@@ -1360,7 +1360,7 @@ class CommandParser extends Writable {
            WHOIS eff.org trillian          ; ask server eff.org for user
            information about trillian
         */
-        return 'WHOIS not yet implemented'
+        return this.createError(400, 'WHOIS not yet implemented');
       },
       WHOWAS: (args) => {
         /* RFC 1459
@@ -1399,7 +1399,7 @@ class CommandParser extends Writable {
            to match "*.edu".
         */
 
-        return 'WHOWAS not yet implemented'
+        return this.createError(400, 'WHOWAS not yet implemented');
       },
       KILL: (args) => {
         /* RFC 1459
@@ -1450,7 +1450,7 @@ class CommandParser extends Writable {
            with KILL message.  In an ideal world not even operators would need
            to do this and it would be left to servers to deal with.
         */
-        return 'KILL not yet implemented';
+        return this.createError(400, 'KILL not yet implemented');
       },
       PING: (args) => {
         /* RFC 1459
@@ -1552,7 +1552,7 @@ class CommandParser extends Writable {
            ; Same ERROR message as above but sent
            to user WiZ on the other server.
         */
-        return 'ERROR not yet implemented';
+        return this.createError(400, 'ERROR not yet implemented');
       }
     }
 
