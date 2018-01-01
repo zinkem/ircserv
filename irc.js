@@ -1,17 +1,38 @@
 'use strict';
 
 const { Writable,
+        Transform,
         PassThrough } = require('stream');
 const net = require('net');
 const proc = require('process');
 
+var inform = new Transform({
+  transform(data, encoding, callback) {
+    var xdata = [ Date.now(), '[SERVER]', data, '\n' ] .join(' ');
+    callback(null, xdata);
+  }
+});
+inform.log = inform.write;
+inform.pipe(proc.stdout);
+
+
+const VERSION_STRING = '0.01 wirc :alpha';
+inform.log(VERSION_STRING);
+
 const err_codes = require('./err_list.json');
 const rpl_codes = require('./rpl_list.json');
+const lookup = {}
 
+for( var k in rpl_codes ){
+  var name = rpl_codes[k].name
+  lookup[name] = k;
+}
 
-console.log(err_codes);
-console.log(rpl_codes);
-
+for( var k in err_codes ){
+  var name = err_codes[k].name
+  lookup[name] = k;
+}
+inform.log('Loaded response codes.');
 
 var users = {};
 var channels = {};
@@ -75,13 +96,14 @@ function prepareSocket(client_socket) {
   });
 }
 
+var server_string = 'localhost'
 
 class CommandParser extends Writable {
   constructor(sock, opts) {
     super(opts)
     this.socket = sock;
     this.user = null;
-    
+
     this.command_list = {
       PASS: (args) => {
         /* RFC 1459
@@ -850,7 +872,7 @@ class CommandParser extends Writable {
       },
       VERSION: (args) => {
         /* RFC 1459
-           4.3.1 Version message        STATUS dummy implementation
+           4.3.1 Version message        STATUS incomplete, no params
 
            Command: VERSION
            Parameters: [<server>]
@@ -871,7 +893,8 @@ class CommandParser extends Writable {
            VERSION tolsun.oulu.fi          ; check the version of server
            "tolsun.oulu.fi".
         */
-        return 'RPL_VERSION node.js irc version 0.0.1 alpha';
+        return this.createReply('RPL_VERSION', VERSION_STRING);
+
       },
       STATS: (args) => {
         /* RFC 1459
@@ -1527,18 +1550,57 @@ class CommandParser extends Writable {
 
   }
 
+  createError(err_name, message) {
+    var err_code = lookup[err_name] || 400;
+    var err_message = message ||
+        ( err_codes[err_code] ?
+          err_codes[err_code].message :
+          'Error unknown');
+
+    var err_uname = '';
+
+    if( this.user && this.user.username )
+      err_uname = this.user.username;
+    else
+      return ':'+server_string+' 400 unregistered :Please Register'
+
+    return [ ':'+server_string,
+             err_code,
+             err_uname,
+             err_message ].join(' ');
+  }
+
+  createReply(rpl_name, message) {
+    var rpl_code = lookup[rpl_name] || 300;
+    var rpl_message = message ||
+        ( rpl_codes[rpl_code] ?
+          rpl_codes[rpl_code].message :
+          '');
+
+    var rpl_uname = '';
+
+    if( this.user && this.user.username )
+      rpl_uname = this.user.username;
+    else
+      return ':'+server_string+' 400 unregistered :Please Register'
+
+    return [ ':'+server_string,
+             rpl_code,
+             rpl_uname,
+             rpl_message ].join(' ');
+  }
+
   parse_command(tokens) {
     //console.log(tokens);
-    var result = null;
     var command_list = this.command_list;
     
     var command = tokens.shift().toUpperCase();
+    var result = null;
 
     if( command_list[command] )  {
       result = command_list[command](tokens)
     } else {
-      result = 'list of commands: ' + Object.keys(command_list).join(', ');
-      //console.log('bad command', command, tokens, Object.keys(command_list));
+      result = this.createError('ERR_UNKNOWNCOMMAND', command+' :Unknown command');
     }
 
     return result;
@@ -1610,3 +1672,4 @@ var server = net.createServer((socket) => {
 })
 
 server.listen(7000);
+inform.log('Listening on 7000');
