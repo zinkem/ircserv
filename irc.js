@@ -6,6 +6,8 @@ const { Writable,
 const net = require('net');
 const proc = require('process');
 
+
+const DEBUG_MODE = false;
 var inform = new Transform({
   transform(data, encoding, callback) {
     var xdata = [ Date.now(), '[SERVER]', data, '\n' ] .join(' ');
@@ -13,6 +15,9 @@ var inform = new Transform({
   }
 });
 inform.log = inform.write;
+inform.debug = function() { if(DEBUG_MODE) console.log.apply(null, arguments); };
+inform.error = function() { var err = Array.prototype.concat.apply(['ERROR!!!'],arguments);
+                            console.log.apply(null, err); };
 inform.pipe(proc.stdout);
 
 const PORT = proc.argv[2] || 6667;
@@ -234,19 +239,19 @@ class CommandParser extends Writable {
 
         this.user.on('pipe', (src) => {
           //src.name, src assumed to be a channel...
-          console.log('UserPassThrough', username, 'pipe', src.name);
+          inform.debug('UserPassThrough', username, 'pipe', src.name);
           this.user.channels[src.name] = true;
         });
         this.user.on('unpipe', (src) => {
-          console.log('UserPassThrough', username, 'unpipe', src.name);
+          inform.debug('UserPassThrough', username, 'unpipe', src.name);
           if( this.user)
             this.user.channels[src.name] = false;
         });
         this.user.on('error', (err) => {
-          console.log('UserPassThrough', username, err);
+          inform.error('UserPassThrough', username, err);
         });
         this.user.on('close', () => {
-          console.log('UserPassThrough', username, 'removing user on UPT close');
+          inform.debug('UserPassThrough', username, 'removing user on UPT close');
           if( users[username] ) {
             delete users[username];
           }
@@ -255,7 +260,7 @@ class CommandParser extends Writable {
             this.user = null;
         });
         this.user.on('end', () => {
-          console.log('UserPassThrough', username, 'end');
+          inform.debug('UserPassThrough', username, 'end');
           if( users[username] ) {
             delete users[username];
           }
@@ -408,7 +413,7 @@ class CommandParser extends Writable {
 
         var mchan = this.user.channels;
         for( var key in mchan ){
-          console.log(key);
+          inform.debug(key);
           if( mchan[key] )
             channels[key].write(':'+username + ' QUIT ' +
                              ' :' + args.join(' ') + '\n');
@@ -1244,7 +1249,7 @@ class CommandParser extends Writable {
           msg.push(':'+args.join(' ')+'\n');
           destination.write(msg.join(' '));
         } else {
-          console.log(chan, args);
+          inform.debug(chan, args);
           return this.createError(400, 'no such user or channel');
         }
       },
@@ -1288,7 +1293,7 @@ class CommandParser extends Writable {
           msg.push(':'+args.join(' ')+'\n');
           destination.write(msg.join(' '));
         } else {
-          console.log(chan, args);
+          inform.debug(chan, args);
           return this.createError(400, 'no such user or channel');
         }
       },
@@ -1607,12 +1612,12 @@ class CommandParser extends Writable {
   }
 
   parse_command(tokens) {
-    //console.log(tokens);
+    inform.debug(tokens);
     var command_list = this.command_list;
     
     var command = tokens.shift().toUpperCase();
     var result = null;
-    //console.log(command);
+    inform.debug(command);
     if( command_list[command] )  {
       result = command_list[command](tokens)
     } else {
@@ -1676,64 +1681,65 @@ var server = net.createServer((socket) => {
   var localAddr = socket.localAddress;
   var localPort = socket.localPort;
 
-  console.log('new connection from', remoteAddr,
-              'on port', localPort);
+  inform.log(['new connection from', remoteAddr,
+              'on port', localPort].join(' '));
+
   var line_filter = new StreamLines({}, '\n');
   var cp = new CommandParser(socket);
   cp.on('drain', () => {
-    console.log('CommandParser', remoteAddr, 'drained');
+    inform.debug('CommandParser', remoteAddr, 'drained');
   });
   cp.on('finish', () => {
-    console.log('CommandParser', remoteAddr, 'finished');
+    inform.debug('CommandParser', remoteAddr, 'finished');
   });
   cp.on('pipe', (src) => {
-    console.log('CommandParser', remoteAddr, 'pipe', typeof src);
+    inform.debug('CommandParser', remoteAddr, 'pipe', typeof src);
   });
   cp.on('unpipe', () => {
-    console.log('CommandParser', remoteAddr, 'unpipe');
+    inform.debug('CommandParser', remoteAddr, 'unpipe');
     socket.end();
   });
   cp.on('error', (err) => {
-    console.log('CommandParser', remoteAddr, 'error', err);
+    inform.error('CommandParser', remoteAddr, 'error', err);
   });
   cp.on('close', () => {
-    console.log('CommandParser', remoteAddr, 'closed');
+    inform.debug('CommandParser', remoteAddr, 'closed');
     socket.end();
   });
   cp.on('end', () => {
-    console.log('CommandParser', remoteAddr, 'ended');
+    inform.debug('CommandParser', remoteAddr, 'ended');
     socket.end();
   });
   socket.pipe(line_filter).pipe(cp);
 
   socket.on('drain', () => {
-    console.log('Socket', remoteAddr, 'drain');
+    inform.debug('Socket', remoteAddr, 'drain');
   });
 
   socket.on('error', (err) => {
-    console.log('Socket', remoteAddr, 'error', err);
+    inform.error('Socket', remoteAddr, 'error', err);
   });
   socket.on('close', () => {
-    console.log('Connection to', remoteAddr, 'closed');
+    inform.debug('Connection to', remoteAddr, 'closed');
     cp.command_list.QUIT(['connection reset by peer']);
   });
   socket.on('end', () => {
-    console.log('Socket', remoteAddr, 'end');
+    inform.debug('Socket', remoteAddr, 'end');
   });
 
   socket.on('timeout', () => {
-    console.log('Socket', remoteAddr, 'timeout');
+    inform.debug('Socket', remoteAddr, 'timeout');
   });
   socket.on('connect', () => {
-    console.log('Socket', remoteAddr, 'connect');
+    inform.debug('Socket', remoteAddr, 'connect');
   });
 
   socket.on('pipe', (src) => {
     //src assumed to be a userpassthrough object
-    console.log('Socket', remoteAddr, 'pipe', src.username);
+    inform.debug('Socket', remoteAddr, 'pipe', src.username);
   });
   socket.on('unpipe', () => {
-    console.log('Socket', remoteAddr, 'unpipe');
+    inform.debug('Socket', remoteAddr, 'unpipe');
   });
 });
 
