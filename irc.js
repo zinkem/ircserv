@@ -15,7 +15,7 @@ var inform = new Transform({
 inform.log = inform.write;
 inform.pipe(proc.stdout);
 
-
+const PORT = proc.argv[2] || 6667;
 const VERSION_STRING = '0.01 wirc :alpha';
 inform.log(VERSION_STRING);
 
@@ -59,43 +59,6 @@ function fetchChannel(channel) {
   return channels[channel];
 }
 
-//call this on incoming sockets to add listeners for cleanup
-function prepareSocket(client_socket) {
-
-  //send channel part message
-  client_socket.on('unpipe', (src) => {
-
-    if( src.name ){
-      var channel = src.name;
-      setTimeout(() => {
-        var id = client_socket.username;
-        if( id )
-          channels[channel].write(':'+id + ' PART :' + channel + '\n');
-      }, 0);
-      console.log('channel unpipe', channel);
-    } else if( src.username ) {
-      var user = src.username;
-      console.log('user unpipe', user);
-    }
-  });
-  
-  //send channel join message
-  client_socket.on('pipe', (src) => {
-    if( !src.name ) return;
-    var channel = src.name;
-    var id = client_socket.username || client_socket.remoteAddress;
-    console.log('channel pipe', channel);
-  });
-
-  //
-  client_socket.on('close', () => {
-    consle.log('cilent sjjss');
-    if( client_socket.username ){
-      console.log(client_socket.username, 'exit');
-    }
-  });
-}
-
 var server_string = 'localhost'
 
 class CommandParser extends Writable {
@@ -104,6 +67,7 @@ class CommandParser extends Writable {
     this.socket = sock;
     this.user = null;
     this.id = 'unregistered'
+    this.con_pass = null;
 
     this.command_list = {
       PASS: (args) => {
@@ -131,7 +95,14 @@ class CommandParser extends Writable {
            PASS secretpasswordhere
 
         */
-        return this.createError('ERR_NEEDMOREPARAMS');
+        if( args.length < 1 )
+          return this.createError('ERR_NEEDMOREPARAMS');
+
+        if( this.user )
+          return this.createError('ERR_ALREADYREGISTRED');
+
+        this.con_pass = args[0];
+
       },
       NICK: (args) => {
         /* RFC 1459
@@ -259,21 +230,45 @@ class CommandParser extends Writable {
         }
 
         this.user = new PassThrough();
+        this.user.channels = {};
+
+        this.user.on('pipe', (src) => {
+          //src.name, src assumed to be a channel...
+          console.log('UserPassThrough', username, 'pipe', src.name);
+          this.user.channels[src.name] = true;
+        });
+        this.user.on('unpipe', (src) => {
+          console.log('UserPassThrough', username, 'unpipe', src.name);
+          if( this.user)
+            this.user.channels[src.name] = false;
+        });
+        this.user.on('error', (err) => {
+          console.log('UserPassThrough', username, err);
+        });
+        this.user.on('close', () => {
+          console.log('UserPassThrough', username, 'removing user on UPT close');
+          if( users[username] ) {
+            delete users[username];
+          }
+
+          if( this.user )
+            this.user = null;
+        });
+        this.user.on('end', () => {
+          console.log('UserPassThrough', username, 'end');
+          if( users[username] ) {
+            delete users[username];
+          }
+
+          if( this.user )
+            this.user = null;
+        });
+
         this.user.username = username;
         this.id = username;
         users[username] = this.user
 
-        prepareSocket(this.user);
-        clientSubscribe('#public', this.user);
-
-        this.user.pipe(this.socket);
-        
-        this.socket.on('close', () => {
-          if( users[username] ) {
-            users[username].end();
-            delete users[username];
-          }
-        });
+        this.user.pipe(this.socket, { end: false });
 
         var str_001 = [ ':'+server_string,
                         '001',
@@ -407,8 +402,20 @@ class CommandParser extends Writable {
            QUIT :Gone to have lunch        ; Preferred message format.
         */
         var username = this.id
-        console.log(username, 'QUIT', args.join(' '));
-        this.socket.end();
+        //duct tape to prevent multiple quit calls
+        if( !this.user )
+          return;
+
+        var mchan = this.user.channels;
+        for( var key in mchan ){
+          console.log(key);
+          if( mchan[key] )
+            channels[key].write(':'+username + ' QUIT ' +
+                             ' :' + args.join(' ') + '\n');
+        }
+        this.user.end();
+        this.user.emit('end');
+        this.end();
       },
       SQUIT: (args) => {
         /* RFC 1459
@@ -531,7 +538,7 @@ class CommandParser extends Writable {
 
         var chan = args[0];
         var user = this.user;
-        if( !user ) return 'please register!';
+        if( !user ) return this.createError(400, 'please register!');
         clientSubscribe(chan, user);
 
         var user_host = '~'+user.username+'@'+this.socket.remoteAddress;
@@ -756,11 +763,11 @@ class CommandParser extends Writable {
         var chan = args[0];
         var user = this.user;
         var result = [];
-        var users = channels[chan]._readableState.pipes;
+        var chan_users = channels[chan]._readableState.pipes;
 
-        for( var k in users )
-          if( users[k].username )
-            result.push(users[k].username)
+        for( var k in chan_users )
+          if( chan_users[k].username )
+            result.push(chan_users[k].username)
 
         var RPL_NAMREPLY_string = [':localhost 353',
                                    user.username,
@@ -966,7 +973,8 @@ class CommandParser extends Writable {
            :Wiz STATS c eff.org            ; request by WiZ for C/N line
            information from server eff.org
         */
-        return this.createError(400, 'STATS not yet implemented');
+        var res = JSON.stringify(proc.memoryUsage());
+        return this.createError(400, res);
       },
       LINKS: (args) => {
         /* RFC 1459
@@ -1320,7 +1328,7 @@ class CommandParser extends Writable {
 
         */
         var userlist = Object.keys(users).join(' ');
-        return userlist;
+        return this.createReply('RPL_WHOREPLY',userlist);
       },
       WHOIS: (args) => {
         /* RFC 1459
@@ -1604,7 +1612,7 @@ class CommandParser extends Writable {
     
     var command = tokens.shift().toUpperCase();
     var result = null;
-
+    //console.log(command);
     if( command_list[command] )  {
       result = command_list[command](tokens)
     } else {
@@ -1619,10 +1627,9 @@ class CommandParser extends Writable {
     var res = this.parse_command(line.split(' '));
     var client_id = this.socket.remoteAddress + ' ' + this.socket.remotePort;
     if( this.user )
-      client_id = this.user.username 
+      client_id = this.user.username
 
     if( res ) { 
-      console.log(client_id, res);
       this.socket.write(res + '\n');
     }
     
@@ -1630,6 +1637,37 @@ class CommandParser extends Writable {
   }
   
 }
+
+var slc = 0;
+class StreamLines extends Transform {
+  /**
+     Ensures data recieved at next stream is broken by newline
+   */
+  constructor(opts, linebreak) {
+    super(opts)
+    this.linebreak = linebreak || '\n';
+    this.buffer = '';
+    this.id = slc++;
+  }
+
+  _transform(data, encoding, callback) {
+    var input = this.buffer + data.toString('utf8');
+    var lines = input.split('\n');
+    this.buffer = lines.pop();
+    while( lines.length > 0 ) {
+      var line = lines.shift();
+      this.push(line);
+    }
+
+    callback();
+  }
+
+  _flush(callback) {
+    this.push(this.buffer+'\n');
+    callback()
+  }
+}
+
 
 var server = net.createServer((socket) => {
   var remoteAddr = socket.remoteAddress;
@@ -1640,44 +1678,70 @@ var server = net.createServer((socket) => {
 
   console.log('new connection from', remoteAddr,
               'on port', localPort);
-
+  var line_filter = new StreamLines({}, '\n');
   var cp = new CommandParser(socket);
-  cp.on('close', () => {
-    console.log('CommandParser for', remoteAddr, 'closed');
-  });
   cp.on('drain', () => {
-    console.log('CommandParser for', remoteAddr, 'drained');
+    console.log('CommandParser', remoteAddr, 'drained');
   });
   cp.on('finish', () => {
-    console.log('CommandParser for', remoteAddr, 'drained');
-  });
-  cp.on('error', () => {
-    console.log('CommandParser for', remoteAddr, 'drained');
+    console.log('CommandParser', remoteAddr, 'finished');
   });
   cp.on('pipe', (src) => {
-    console.log('CommandParser for', remoteAddr, 'pipe');
+    console.log('CommandParser', remoteAddr, 'pipe', typeof src);
   });
   cp.on('unpipe', () => {
-    console.log('CommandParser for', remoteAddr, 'unpipe');
+    console.log('CommandParser', remoteAddr, 'unpipe');
+    socket.end();
   });
-  
-  socket.pipe(cp);
+  cp.on('error', (err) => {
+    console.log('CommandParser', remoteAddr, 'error', err);
+  });
+  cp.on('close', () => {
+    console.log('CommandParser', remoteAddr, 'closed');
+    socket.end();
+  });
+  cp.on('end', () => {
+    console.log('CommandParser', remoteAddr, 'ended');
+    socket.end();
+  });
+  socket.pipe(line_filter).pipe(cp);
 
-  socket.on('close', () => {
-    console.log('Connection to', remoteAddr, 'closed');
-    cp.end();
+  socket.on('drain', () => {
+    console.log('Socket', remoteAddr, 'drain');
   });
 
   socket.on('error', (err) => {
-    if( err.code === 'ECONNRESET' ){
-      console.log(remoteAddr, 'client disconnected');
-    } else {
-      console.log('closed with error', err);
-    }
+    console.log('Socket', remoteAddr, 'error', err);
+  });
+  socket.on('close', () => {
+    console.log('Connection to', remoteAddr, 'closed');
+    cp.command_list.QUIT(['connection reset by peer']);
+  });
+  socket.on('end', () => {
+    console.log('Socket', remoteAddr, 'end');
   });
 
-  //console.log(socket);
-})
+  socket.on('timeout', () => {
+    console.log('Socket', remoteAddr, 'timeout');
+  });
+  socket.on('connect', () => {
+    console.log('Socket', remoteAddr, 'connect');
+  });
 
-server.listen(7000);
-inform.log('Listening on 7000');
+  socket.on('pipe', (src) => {
+    //src assumed to be a userpassthrough object
+    console.log('Socket', remoteAddr, 'pipe', src.username);
+  });
+  socket.on('unpipe', () => {
+    console.log('Socket', remoteAddr, 'unpipe');
+  });
+});
+
+server.listen(PORT);
+inform.log('Listening on '+PORT);
+
+inform.log(proc.memoryUsage().rss/1000000+'M');
+setInterval( () => {
+  var mem_string = proc.memoryUsage().rss/1000000+'M';
+  inform.log(Object.keys(users).length + ' ' + mem_string);
+}, 30000);
