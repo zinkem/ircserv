@@ -22,7 +22,8 @@ inform.pipe(proc.stdout);
 
 const PORT = proc.argv[2] || 6667;
 const VERSION_STRING = '0.01 wirc :alpha';
-inform.log(VERSION_STRING);
+const CREATION_TIME = new Date().toString();
+inform.log([VERSION_STRING, 'started at', CREATION_TIME].join(' '));
 
 const err_codes = require('./err_list.json');
 const rpl_codes = require('./rpl_list.json');
@@ -132,15 +133,15 @@ class CommandParser extends Writable {
         sock.remoteAddress.indexOf('::ffff:') >= 0)
       lookup_addr = lookup_addr.split('::ffff:')[1];
 
-    sock.write('NOTICE AUTH :Looking up hostname...\n')
+    sock.write('NOTICE AUTH :*** Looking up hostname...\n')
     dns.reverse(lookup_addr, (err, hostnames) => {
       if(err) {
         if( err.code !== 'ENOTFOUND')
           inform.error(err);
-        sock.write('NOTICE AUTH :Could not find hostname, using '+this.hostname+'\n');
+        sock.write('NOTICE AUTH :*** Could not find hostname, using '+this.hostname+'\n');
       } else {
         this.hostname = hostnames[0];
-        sock.write('NOTICE AUTH :Found hostname '+this.hostname+'\n')
+        sock.write('NOTICE AUTH :*** Found hostname '+this.hostname+'\n')
       }
       inform.log(['Found hostname', this.hostname, 'for address', lookup_addr].join(' '));
     });
@@ -364,11 +365,12 @@ class CommandParser extends Writable {
         var str_002 = [ ':'+server_string,
                         '002',
                         username,
-                        ':Your host is '+server_string+'' ].join(' ');
+                        ':Your host is '+this.hostname+'' ].join(' ');
         var str_003 = [ ':'+server_string,
                         '003',
                         username,
-                        ':This server was created'].join(' ');
+                        ':This server was created at',
+                        CREATION_TIME].join(' ');
 
         return [str_001, str_002, str_003].join('\n');
       },
