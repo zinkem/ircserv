@@ -110,6 +110,10 @@ function fetchChannel(channel) {
   return channels[channel];
 }
 
+function validNick(nick) {
+  return nick.length < 16;
+}
+
 var server_string = 'localhost'
 
 class CommandParser extends Writable {
@@ -147,7 +151,7 @@ class CommandParser extends Writable {
 
         */
         if( args.length < 1 )
-          return this.createError('ERR_NEEDMOREPARAMS');
+          return this.createError('ERR_NEEDMOREPARAMS').replace('<command>', 'PASS');;
 
         if( this.user )
           return this.createError('ERR_ALREADYREGISTRED');
@@ -157,7 +161,7 @@ class CommandParser extends Writable {
       },
       NICK: (args) => {
         /* RFC 1459
-           4.1.2 Nick message           STATUS incomplete :ERRONEOUSNICKNAME, NICKCOLLISION
+           4.1.2 Nick message           STATUS finished until SERVER
 
            Command: NICK
            Parameters: <nickname> [ <hopcount> ]
@@ -192,13 +196,22 @@ class CommandParser extends Writable {
 
         */
 
+        //enough params?
         if( args.length < 1 )
-          return this.createError('ERR_NONICKNAMEGIVEN',null,this.id);
+          return this.createError('ERR_NONICKNAMEGIVEN',null,true);
 
         var new_name = args[0];
 
+        //is this a valid nickname?
+        if( !validNick(new_name) ) {
+          return this.createError('ERR_ERRONEUSNICKNAME',null,true)
+            .replace('<nick>', new_name);
+        }
+
+        //is someone using this name already?
         if( users[new_name] ) {
-          return this.createError('ERR_NICKNAMEINUSE',null,this.id);
+          return this.createError('ERR_NICKNAMEINUSE',null,true)
+            .replace('<nick>', new_name);
         }
 
         var old_name = new_name;
@@ -262,8 +275,10 @@ class CommandParser extends Writable {
            belongs to
 
         */
-        if( args.length < 4 )
-          return this.createError('ERR_NEEDMOREPARAMS',null,this.id);
+        if( args.length < 4 ) {
+          return this.createError('ERR_NEEDMOREPARAMS',null,true)
+            .replace('<command>', 'USER');
+        }
 
         var username = args.shift();
         var mode = args.shift();
@@ -271,13 +286,13 @@ class CommandParser extends Writable {
         var real_name = args.join(' ').slice(1).trim();
 
         //is this connection already registered?
-        if( this.user ){
-          return this.createError('ERR_ALREADYREGISTRED',null,this.id);
-        }
+        if( this.user )
+          return this.createError('ERR_ALREADYREGISTRED');
 
         //does username exist?
         if( users[username] ) {
-          return this.createError('ERR_NICKNAMEINUSE',null,this.id);
+          return this.createError('ERR_NICKNAMEINUSE',null,true)
+            .replace('<nick>', username);
         }
 
         this.user = new PassThrough();
@@ -422,7 +437,7 @@ class CommandParser extends Writable {
       },
       QUIT: (args) => {
         /* RFC 1459
-           4.1.6 Quit                   STATUS incomplete
+           4.1.6 Quit                   STATUS finished
 
            Command: QUIT
            Parameters: [<Quit message>]
@@ -588,7 +603,7 @@ class CommandParser extends Writable {
         */
 
         if( args.length < 1 ){
-          return this.createError('ERR_NEEDMOREPARAMS');
+          return this.createError('ERR_NEEDMOREPARAMS').replace('<command>', 'JOIN');;
         }
 
         var chan = args[0];
@@ -658,7 +673,7 @@ class CommandParser extends Writable {
       },
       MODE: (args) => {
         /* RFC 1459
-           4.2.3 Mode message           STATUS incomplete PRIORITY
+           4.2.3 Mode message           STATUS 49% complete, channel only, no user modes
 
            Command: MODE
 
@@ -776,7 +791,7 @@ class CommandParser extends Writable {
         //user mode args[0] = nickname (4.2.3.2)
 
         if( args.length < 1)
-          return this.createError('ERR_NEEDMOREPARAMS');
+          return this.createError('ERR_NEEDMOREPARAMS').replace('<command>', 'MODE');
 
         var chan = args[0];
         var flags = args[1];
@@ -854,7 +869,7 @@ class CommandParser extends Writable {
       },
       TOPIC: (args) => {
         /* RFC 1459 
-           4.2.4 Topic message          STATUS incomplete
+           4.2.4 Topic message          STATUS finished
 
            Command: TOPIC
            Parameters: <channel> [<topic>]
@@ -880,7 +895,7 @@ class CommandParser extends Writable {
            TOPIC #test                     ; check the topic for #test.
         */
         if( args.length < 1 )
-          return this.createError('ERR_NEEDMOREPARAMS');
+          return this.createError('ERR_NEEDMOREPARAMS').replace('<command>', 'TOPIC');
 
         var chan = args[0];
         var username = this.user.username;
@@ -941,7 +956,7 @@ class CommandParser extends Writable {
         */
 
         if( args.length < 1 )
-          return this.createError('ERR_NEEDMOREPARAMS');
+          return this.createError('ERR_NEEDMOREPARAMS').replace('<command>', 'NAMES');
 
         var chanlist = args[0].split(',');
         var user = this.user;
@@ -1042,7 +1057,7 @@ class CommandParser extends Writable {
 
         */
         if( args.length < 2 )
-          return this.createError('ERR_NEEDMOREPARAMS');
+          return this.createError('ERR_NEEDMOREPARAMS').replace('<command>', 'INVITE');
 
         var user = this.user.username;
         var nick = args[0];
@@ -1080,7 +1095,7 @@ class CommandParser extends Writable {
       },
       KICK: (args) => {
         /* RFC 1459
-           4.2.8 Kick command           STATUS not implemented
+           4.2.8 Kick command           STATUS finished
 
            Command: KICK
            Parameters: <channel> <user> [<comment>]
@@ -1118,12 +1133,38 @@ class CommandParser extends Writable {
            <channel>{,<channel>} <user>{,<user>} [<comment>]
 
         */
-        
-        return this.createError(400, 'KICK not yet implemented');
+
+        //enough params?
+        if( args.length < 2 )
+          return this.createError('ERR_NEEDMOREPARAMS').replace('<command>', 'KICK');
+
+        var chan = args[0];
+        var nick = args[1];
+        var chan_stream = channels[chan];
+
+        //does channel exist?
+        if( !chan_stream )
+          return this.createError('ERR_NOSUCHCHANNEL').replace('<channel name', chan);
+
+        //nick on channel?
+        if( !users[nick].channels[chan] ){
+          return this.createError('ERR_NOTONCHANNEL').reaplce('<channel>', chan);
+        }
+
+        //channel operator?
+        if( !chan_stream.mode.o[this.user.username] ){
+          return this.createError('ERR_CHANOPRIVSNEEDED').replace('<channel>', chan);
+        }
+
+        clientUnSubscribe(chan, users[nick]);
+
+        chan_stream.write([':'+this.user.username,
+                           'KICK',
+                           args.join(' ')].join(' ') + '\n');
       },
       VERSION: (args) => {
         /* RFC 1459
-           4.3.1 Version message        STATUS incomplete, no params
+           4.3.1 Version message        STATUS finished until SERVER
 
            Command: VERSION
            Parameters: [<server>]
@@ -1245,7 +1286,7 @@ class CommandParser extends Writable {
       },
       TIME: (args) => {
         /* RFC 1459
-           4.3.4 Time message           STATUS dummy implementation
+           4.3.4 Time message           STATUS finished until SERVER
 
            Command: TIME
            Parameters: [<server>]
@@ -1267,11 +1308,11 @@ class CommandParser extends Writable {
            server matching "*.au"
 
         */
-        return new Date().toString();
+        return this.createReply('RPL_TIME', new Date().toString());
       },
       CONNECT: (args) => {
         /* RFC 1459
-           4.3.5 Connect message        STATUS not implemented
+           4.3.5 Connect message        STATUS finished until SERVER (no imp)
 
            Command: CONNECT
            Parameters: <target server> [<port> [<remote server>]]
@@ -1301,7 +1342,7 @@ class CommandParser extends Writable {
       },
       TRACE: (args) => {
         /* RFC 1459
-           4.3.6 Trace message          STATUS not implemented
+           4.3.6 Trace message          STATUS finished until SERVER (no imp)
 
            Command: TRACE
            Parameters: [<server>]
@@ -1350,7 +1391,7 @@ class CommandParser extends Writable {
       },
       ADMIN: (args) => {
         /* RFC 1459
-           4.3.7 Admin command          STATUS not implemented
+           4.3.7 Admin command          STATUS more info
 
            Command: ADMIN
            Parameters: [<server>]
@@ -1378,7 +1419,7 @@ class CommandParser extends Writable {
       },
       INFO: (args) => {
         /* RFC 1459
-           4.3.8 Info command           STATUS not implemented
+           4.3.8 Info command           STATUS more info
 
            Command: INFO
            Parameters: [<server>]
@@ -1416,7 +1457,7 @@ class CommandParser extends Writable {
            to ensure it happens in a reliable and structured manner.
         */
         /* RFC 1459
-           4.4.1 Private messages       STATUS incomplete error handling
+           4.4.1 Private messages       STATUS finished
 
            Command: PRIVMSG
            Parameters: <receiver>{,<receiver>} <text to be sent>
@@ -1471,7 +1512,7 @@ class CommandParser extends Writable {
       NOTICE: (args) => {
 
         /* RFC 1459
-           4.4.2 Notice                 STATUS incomplete error handling
+           4.4.2 Notice                 STATUS finished
 
            Command: NOTICE
            Parameters: <nickname> <text>
@@ -1803,18 +1844,17 @@ class CommandParser extends Writable {
     destination.write(msg.join(' '));
   }
 
-  createError(err_name, message, name) {
+  createError(err_name, message,bypass) {
     var err_code = lookup[err_name] || 400;
     var err_message = message ||
         ( err_codes[err_code] ?
           err_codes[err_code].message :
           'Error unknown');
 
-    var err_uname = name;
-
-    if( !err_uname ) if( this.user && this.user.username )
+    var err_uname = '__unregistered__';
+    if( this.user && this.user.username )
       err_uname = this.user.username;
-    else
+    else if( !bypass )
       return ':'+server_string+' 400 unregistered :Please Register'
 
     return [ ':'+server_string,
