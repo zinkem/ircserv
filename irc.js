@@ -42,12 +42,55 @@ inform.log('Loaded response codes.');
 var users = {};
 var channels = {};
 
+function modeString(mode) {
+  var result = '+';
+
+  var modes = Object.keys(mode);
+  for( var k in mode ){
+    if( mode[k] === true )
+      result += k;
+  }
+
+  return result;
+}
+
 function clientSubscribe(channel, client_socket) {
   channel = channel.toLowerCase();
   if( !channels[channel] ) {
     channels[channel] = new PassThrough();
     channels[channel].pipe(proc.stdout);
     channels[channel].name = channel;
+    channels[channel].topic = ':Welcome to '+channel;
+
+    /*
+      The various modes available for channels are as follows:
+
+      o - give/take channel operator privileges;
+      p - private channel flag;
+      s - secret channel flag;
+      i - invite-only channel flag;
+      t - topic settable by channel operator only flag;
+      n - no messages to channel from clients on the outside;
+      m - moderated channel;
+      l - set the user limit to channel;
+      b - set a ban mask to keep users out;
+      v - give/take the ability to speak on a moderated channel;
+      k - set a channel key (password).
+    */
+    channels[channel].mode = {
+      o : {},
+      p : false,
+      s : false,
+      i : false,
+      t : true,
+      n : true,
+      m : false,
+      l : 2,
+      b : '',
+      v : {},
+      k : ''
+    }
+
   }
 
   channels[channel].pipe(client_socket);
@@ -544,6 +587,12 @@ class CommandParser extends Writable {
         var chan = args[0];
         var user = this.user;
         if( !user ) return this.createError(400, 'please register!');
+
+        if( channels[chan] &&
+            channels[chan]._readableState.pipes.length > channels[chan].mode.l ) {
+          return this.createError('ERR_CHANNELISFULL');
+        }
+
         clientSubscribe(chan, user);
 
         var user_host = '~'+user.username+'@'+this.socket.remoteAddress;
@@ -698,7 +747,11 @@ class CommandParser extends Writable {
 
         //channel mode args[0] = channel (4.2.3.1)
         //user mode args[0] = nickname (4.2.3.2)
-        return ':localhost 324 '+this.user.username+' '+args[0]+' +t';
+
+        var chan_stream = channels[args[0]];
+        var mode = chan_stream.mode;
+
+        return ':'+server_string+' 324 '+this.user.username+' '+args[0]+' '+modeString(mode);
       },
       TOPIC: (args) => {
         /* RFC 1459 
@@ -729,7 +782,13 @@ class CommandParser extends Writable {
         */
         var chan = args[0];
         var username = this.user.username;
-        var RPL_TOPIC_string = [':localhost 332',username,chan,':Generic Topic'].join(' ');
+
+        if( args[1] ){
+          var new_topic = args.slice(1).join(' ').slice(1);
+          channels[chan].topic = ':'+new_topic;
+        }
+
+        var RPL_TOPIC_string = [':localhost 332',username,chan,channels[chan].topic].join(' ');
         return RPL_TOPIC_string;
       },
       NAMES: (args) => {
@@ -1528,7 +1587,7 @@ class CommandParser extends Writable {
            PONG csd.bu.edu tolsun.oulu.fi  ; PONG message from csd.bu.edu to
            tolsun.oulu.fi
         */
-        console.log('PONG', args);
+        inform.debug('PONG', args);
         return ':localhost NOTICE * PONG? PING!';
       },
       ERROR: (args) => {
