@@ -5,7 +5,7 @@ const { Writable,
         PassThrough } = require('stream');
 const net = require('net');
 const proc = require('process');
-
+const dns = require('dns')
 
 const DEBUG_MODE = false;
 var inform = new Transform({
@@ -114,7 +114,8 @@ function validNick(nick) {
   return nick.length < 16;
 }
 
-var server_string = 'localhost'
+var server_string = 'fibonaut.com'
+inform.log(server_string);
 
 class CommandParser extends Writable {
   constructor(sock, opts) {
@@ -123,6 +124,26 @@ class CommandParser extends Writable {
     this.user = null;
     this.id = 'unregistered'
     this.con_pass = null;
+    this.hostname = sock.remoteAddress;
+
+    var lookup_addr = sock.remoteAddress;
+
+    if( sock.remoteFamily === 'IPv6' &&
+        sock.remoteAddress.indexOf('::ffff:') >= 0)
+      lookup_addr = lookup_addr.split('::ffff:')[1];
+
+    sock.write('NOTICE AUTH :Looking up hostname...\n')
+    dns.reverse(lookup_addr, (err, hostnames) => {
+      if(err) {
+        if( err.code !== 'ENOTFOUND')
+          inform.error(err);
+        sock.write('NOTICE AUTH :Could not find hostname, using '+this.hostname+'\n');
+      } else {
+        this.hostname = hostnames[0];
+        sock.write('NOTICE AUTH :Found hostname '+this.hostname+'\n')
+      }
+      inform.log(['Found hostname', this.hostname, 'for address', lookup_addr].join(' '));
+    });
 
     this.command_list = {
       PASS: (args) => {
@@ -331,7 +352,7 @@ class CommandParser extends Writable {
         });
 
         this.user.username = username;
-        this.id = username;
+        this.id = username+'!~'+username+'@'+this.hostname;
         users[username] = this.user
 
         this.user.pipe(this.socket, { end: false });
@@ -339,11 +360,11 @@ class CommandParser extends Writable {
         var str_001 = [ ':'+server_string,
                         '001',
                         username,
-                        ':Welcome to localhost irc server!'].join(' ');
+                        ':Welcome to '+server_string+' irc server!'].join(' ');
         var str_002 = [ ':'+server_string,
                         '002',
                         username,
-                        ':Your host is localhost' ].join(' ');
+                        ':Your host is '+server_string+'' ].join(' ');
         var str_003 = [ ':'+server_string,
                         '003',
                         username,
@@ -637,9 +658,7 @@ class CommandParser extends Writable {
 
         clientSubscribe(chan, user);
 
-        var user_host = '~'+user.username+'@'+this.socket.remoteAddress;
-
-        channels[chan].write(':'+user.username+'!'+user_host+' JOIN :'+chan+'\n');
+        channels[chan].write(':'+this.id+' JOIN :'+chan+'\n');
         return [ this.command_list.TOPIC([ chan ]), this.command_list.NAMES([ chan ]) ].join('\n');
       },
       PART: (args) => {
@@ -665,9 +684,13 @@ class CommandParser extends Writable {
            PART #oz-ops,&group5            ; leave both channels "&group5" and
            "#oz-ops".
         */
+        if( args < 1 ){
+          return this.createError('ERR_NEEDMOREPARAMS').replace('<command>', 'PART');
+        }
+
         var chan = args.shift();
         var user = this.user;
-        channels[chan].write(':'+user.username + ' PART ' + chan +
+        channels[chan].write(':'+this.id + ' PART ' + chan +
                              ' :' + args.join(' ') + '\n');
         clientUnSubscribe(chan, user);
       },
@@ -1745,7 +1768,7 @@ class CommandParser extends Writable {
           users[dest].write(':'+this.user.username + ' PING ' + dest);
         }
 
-        return ':localhost PONG';
+        return ':admin@'+server_string+' PONG';
       },
       PONG: (args) => {
         /* RFC 1459
@@ -1769,7 +1792,7 @@ class CommandParser extends Writable {
            tolsun.oulu.fi
         */
         inform.debug('PONG', args);
-        return ':localhost NOTICE * PONG? PING!';
+        return ':admin@'+server_string+' NOTICE * PONG? PING!';
       },
       ERROR: (args) => {
         /* RFC 1459
@@ -1836,7 +1859,7 @@ class CommandParser extends Writable {
 
     //prepare message
     var msg = [];
-    msg.push(':'+this.user.username);
+    msg.push(':'+this.id);
     msg.push(type);
     msg.push(chan);
     msg.push(':'+args.join(' ')+'\n');
@@ -1953,7 +1976,7 @@ var server = net.createServer((socket) => {
   var localAddr = socket.localAddress;
   var localPort = socket.localPort;
 
-  inform.log(['new connection from', remoteAddr,
+  inform.log(['New connection from', remoteAddr,
               'on port', localPort].join(' '));
 
   var line_filter = new StreamLines({}, '\n');
