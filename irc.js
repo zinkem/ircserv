@@ -65,17 +65,17 @@ function clientSubscribe(channel, client_socket) {
     /*
       The various modes available for channels are as follows:
 
-      o - give/take channel operator privileges;
-      p - private channel flag;
-      s - secret channel flag;
-      i - invite-only channel flag;
-      t - topic settable by channel operator only flag;
-      n - no messages to channel from clients on the outside;
-      m - moderated channel;
-      l - set the user limit to channel;
-      b - set a ban mask to keep users out;
-      v - give/take the ability to speak on a moderated channel;
-      k - set a channel key (password).
+      o - give/take channel operator privileges;                 STATUS complete
+      p - private channel flag;                                  STATUS complete
+      s - secret channel flag;                                   STATUS complete
+      i - invite-only channel flag;                              STATUS set/unset
+      t - topic settable by channel operator only flag;          STATUS complete
+      n - no messages to channel from clients on the outside;    STATUS complete
+      m - moderated channel;                                     STATUS complete
+      l - set the user limit to channel;                         STATUS set/unset -l broken
+      b - set a ban mask to keep users out;                      STATUS incomplete
+      v - give/take the ability to speak on a moderated channel; STATUS complete
+      k - set a channel key (password).                          STATUS set/unset
     */
     channels[channel].mode = {
       o : {},
@@ -90,6 +90,9 @@ function clientSubscribe(channel, client_socket) {
       v : {},
       k : ''
     }
+
+    //grant ops to first channel member
+    channels[channel].mode.o[client_socket.username] = true;
   }
 
   channels[channel].pipe(client_socket);
@@ -260,7 +263,7 @@ class CommandParser extends Writable {
         */
         if( args.length < 4 )
           return this.createError('ERR_NEEDMOREPARAMS',null,this.id);
-        
+
         var username = args.shift();
         var mode = args.shift();
         var unused = args.shift();
@@ -747,11 +750,82 @@ class CommandParser extends Writable {
         //channel mode args[0] = channel (4.2.3.1)
         //user mode args[0] = nickname (4.2.3.2)
 
-        var chan_stream = channels[args[0]];
+        if( args.length < 1)
+          return this.createError('ERR_NEEDMOREPARAMS');
+
+        var chan = args[0];
+        var flags = args[1];
+        var params = args.slice(2);
+
+        var chan_stream = channels[chan];
+        if( !chan_stream ){
+          return this.createError('ERR_NOTONCHANNEL').replace('<channel>', chan);
+        }
+
         var mode = chan_stream.mode;
 
-        return [this.createReply('RPL_CHANNELMODEIS', args[0]+' '+modeString(mode)),
-                this.createReply('RPL_CREATIONTIME', args[0]+' '+chan_stream.created)].join('\n');
+        if( flags ){
+
+          if( !mode.o[this.user.username] )
+            return this.createError('ERR_CHANOPRIVSNEEDED').replace('<channel>', chan)
+
+          inform.debug(params);
+          inform.debug(flags);
+          if( flags[0] === '+' ) {
+            //+
+            flags = flags.substring(1);
+            for( var i in flags ){
+              var op = flags[i];
+              inform.debug('set', op, mode[op]);
+
+              if( mode[op] === false) {
+                mode[op] = true;
+              } else {
+                if( op === 'o' || op === 'v') {
+                  var u = params.shift();
+                  mode[op][u] = true;
+                  inform.debug('set',op, u);
+                } else if( op === 'l' || op === 'k' ) {
+                  var u = params.shift();
+                  mode[op] = u;
+                  inform.debug('set',op, u);
+                } else {
+                  inform.debug('no op', op);
+                }
+              }
+            }
+          } else if( flags[0] === '-' ) {
+            //-
+            flags = flags.substring(1);
+            for( var i in flags ){
+              var op = flags[i];
+              inform.debug('unset', op, mode[op]);
+
+              if( mode[op] && mode[op] === true) {
+                mode[op] = false;
+              } else {
+                if( op === 'o' || op === 'v') {
+                  var u = params.shift();
+                  mode[op][u] = false;
+                  inform.debug('unset',op, u);
+                } else if( op === 'l' ) {
+                  mode.l = -1;
+                  inform.debug('unset',op,'-1');
+                } else if( op === 'k' ) {
+                  mode.k = '';
+                  inform.debug('unset',op,'');
+                } else {
+                  inform.debug('no op', op);
+                }
+              }
+            }
+          }
+          chan_stream.write( [ ':'+this.user.username , 'MODE', args.join(' ') ].join(' ')+'\n' );
+        }
+
+        return [ this.createReply('RPL_CHANNELMODEIS', chan+' '+modeString(mode)),
+                 this.createReply('RPL_CREATIONTIME', chan+' '+chan_stream.created)
+               ].join('\n');
       },
       TOPIC: (args) => {
         /* RFC 1459 
@@ -787,20 +861,23 @@ class CommandParser extends Writable {
         var username = this.user.username;
 
         if( !this.user.channels[chan] )
-          return this.createError('ERR_NOTONCHANNEL');
+          return this.createError('ERR_NOTONCHANNEL').replace('<channel>', chan);
 
-        if( args[1] && channels[chan].mode.t ){
+        if( args[1] && channels[chan].mode.t && !channels[chan].mode.o[username]){
           //check for user op privileges
-          return this.createError('ERR_CHANOPRIVSNEEDED');
+          return this.createError('ERR_CHANOPRIVSNEEDED').replace('<channel>', chan);
         }
 
         //duct tape
         if( args[2] ) {
           var new_topic = args.slice(1).join(' ').slice(1);
           channels[chan].topic = ':'+new_topic;
+          channels[chan].write(this.createReply('RPL_TOPIC', [chan, channels[chan].topic].join(' '))+'\n');
+
         } else if( args[1] ){
           var new_topic = args.slice(1);
           channels[chan].topic = ':'+new_topic;
+          channels[chan].write(this.createReply('RPL_TOPIC', [chan, channels[chan].topic].join(' '))+'\n');
         }
 
         return this.createReply('RPL_TOPIC', [chan, channels[chan].topic].join(' '));
@@ -838,26 +915,36 @@ class CommandParser extends Writable {
 
         */
 
-        var chan = args[0];
+        if( args.length < 1 )
+          return this.createError('ERR_NEEDMOREPARAMS');
+
+        var chanlist = args[0].split(',');
         var user = this.user;
-        var result = [];
-        var chan_users = channels[chan]._readableState.pipes;
 
-        for( var k in chan_users )
-          if( chan_users[k].username )
-            result.push(chan_users[k].username)
+        for( var i in chanlist ){
 
-        var RPL_NAMREPLY_string = [':localhost 353',
-                                   user.username,
-                                   '=',
-                                   chan,
-                                   ':'+result.join(' ')].join(' ');
-        var RPL_ENDOFNAMES_string = [':localhost 366',
-                                     user.username,
-                                     chan,
-                                     ':End of /NAMES list'].join(' ');
-        return [ RPL_NAMREPLY_string, RPL_ENDOFNAMES_string ].join('\n');
+          var chan = chanlist[i];
 
+          if( !channels[chan] ) {
+            this.socket.write(this.createError('ERR_NOSUCHCHANNEL')
+                              .replace('<channel name>', chan)+'\n');
+            continue;
+          }
+
+          var result = [];
+          var chan_users = channels[chan]._readableState.pipes;
+
+          for( var k in chan_users )
+            if( chan_users[k].username )
+              result.push(chan_users[k].username)
+
+          result = result.map( x => (channels[chan].mode.o[x] ? '@'
+                                     : channels[chan].mode.v[x] ? '+' : '') + x );
+          inform.debug(result);
+          inform.debug(channels[chan].mode.o);
+          this.socket.write(this.createReply('RPL_NAMREPLY', '@ '+chan +' :'+ result.join(' '))+'\n');
+          this.socket.write(this.createReply('RPL_ENDOFNAMES').replace('<channel>', chan)+'\n');
+        }
       },
       LIST: (args) => {
         /* RFC 1459
@@ -884,8 +971,19 @@ class CommandParser extends Writable {
 
            LIST #twilight_zone,#42         ; List channels #twilight_zone and #42
         */
-        var chanlist = Object.keys(channels).join('\n');
-        return chanlist;
+        var chanlist = Object.keys(channels)
+            .filter(k => !channels[k].mode.p &&
+                    !channels[k].mode.s)
+        this.socket.write(this.createReply('RPL_LISTSTART')+'\n');
+
+        for( var k in chanlist ) {
+          this.socket.write(this.createReply('RPL_LIST')
+                            .replace(/<channel>/g, chanlist[k])
+                            .replace(/:<topic>/g, channels[chanlist[k]].topic)
+                            .replace(/<# visible>/g, '*')+'\n')
+        }
+
+        return this.createReply('RPL_LISTEND');
       },
       INVITE: (args) => {
         /* RFC 1459
@@ -1539,7 +1637,7 @@ class CommandParser extends Writable {
 
            PING WiZ                        ; PING message being sent to nick WiZ
         */
-        console.log('PING', args);
+        inform.debug('PING', args);
         var dest = args[1];
 
         if( users[dest] ){
@@ -1620,12 +1718,18 @@ class CommandParser extends Writable {
     var destination = fetchChannel(chan);
     if( destination ){
       if( destination.mode.n && !this.user.channels[chan] )
-        return this.createError('ERR_CANNOTSENDTOCHAN');
+        return this.createError('ERR_CANNOTSENDTOCHAN').replace('<channel name>', chan);
+
+      if( destination.mode.m === true &&
+          !(destination.mode.v[this.user.username] ||
+            destination.mode.o[this.user.username]) ){
+        return this.createError('ERR_CANNOTSENDTOCHAN').replace('<channel name>', chan);
+      }
       //destination set to privmsg channel
     } else {
       destination = users[chan];
       if( !destination )
-        return this.createError('ERR_NOSUCHNICK');
+        return this.createError('ERR_NOSUCHNICK').replace('<nickname>', chan);
       //destination set to privmsg user
     }
 
