@@ -61,7 +61,7 @@ function clientSubscribe(channel, client_socket) {
     channels[channel].pipe(proc.stdout);
     channels[channel].name = channel;
     channels[channel].topic = ':Welcome to '+channel;
-
+    channels[channel].created = Math.floor(Date.now()/1000);
     /*
       The various modes available for channels are as follows:
 
@@ -85,12 +85,11 @@ function clientSubscribe(channel, client_socket) {
       t : true,
       n : true,
       m : false,
-      l : 2,
+      l : 100,
       b : '',
       v : {},
       k : ''
     }
-
   }
 
   channels[channel].pipe(client_socket);
@@ -329,7 +328,7 @@ class CommandParser extends Writable {
         var str_003 = [ ':'+server_string,
                         '003',
                         username,
-                        ':This server was created a while back'].join(' ');
+                        ':This server was created'].join(' ');
 
         return [str_001, str_002, str_003].join('\n');
       },
@@ -625,9 +624,9 @@ class CommandParser extends Writable {
         */
         var chan = args.shift();
         var user = this.user;
-        clientUnSubscribe(chan, user);
         channels[chan].write(':'+user.username + ' PART ' + chan +
                              ' :' + args.join(' ') + '\n');
+        clientUnSubscribe(chan, user);
       },
       MODE: (args) => {
         /* RFC 1459
@@ -751,7 +750,8 @@ class CommandParser extends Writable {
         var chan_stream = channels[args[0]];
         var mode = chan_stream.mode;
 
-        return ':'+server_string+' 324 '+this.user.username+' '+args[0]+' '+modeString(mode);
+        return [this.createReply('RPL_CHANNELMODEIS', args[0]+' '+modeString(mode)),
+                this.createReply('RPL_CREATIONTIME', args[0]+' '+chan_stream.created)].join('\n');
       },
       TOPIC: (args) => {
         /* RFC 1459 
@@ -780,16 +780,30 @@ class CommandParser extends Writable {
 
            TOPIC #test                     ; check the topic for #test.
         */
+        if( args.length < 1 )
+          return this.createError('ERR_NEEDMOREPARAMS');
+
         var chan = args[0];
         var username = this.user.username;
 
-        if( args[1] ){
+        if( !this.user.channels[chan] )
+          return this.createError('ERR_NOTONCHANNEL');
+
+        if( args[1] && channels[chan].mode.t ){
+          //check for user op privileges
+          return this.createError('ERR_CHANOPRIVSNEEDED');
+        }
+
+        //duct tape
+        if( args[2] ) {
           var new_topic = args.slice(1).join(' ').slice(1);
+          channels[chan].topic = ':'+new_topic;
+        } else if( args[1] ){
+          var new_topic = args.slice(1);
           channels[chan].topic = ':'+new_topic;
         }
 
-        var RPL_TOPIC_string = [':localhost 332',username,chan,channels[chan].topic].join(' ');
-        return RPL_TOPIC_string;
+        return this.createReply('RPL_TOPIC', [chan, channels[chan].topic].join(' '));
       },
       NAMES: (args) => {
         /* RFC 1459
@@ -1291,26 +1305,10 @@ class CommandParser extends Writable {
            ; Message to all users who come from a
            host which has a name matching *.edu.
         */
-        var chan = args.shift();
-
         if( !this.user )
           return this.createError(400, 'please register!');
 
-        var destination = fetchChannel(chan);
-
-        if( !destination ) destination = users[chan];
-        
-        if( destination ){
-          var msg = [];
-          msg.push(':'+this.user.username);
-          msg.push('PRIVMSG');
-          msg.push(chan);
-          msg.push(':'+args.join(' ')+'\n');
-          destination.write(msg.join(' '));
-        } else {
-          inform.debug(chan, args);
-          return this.createError(400, 'no such user or channel');
-        }
+        return this.sendMessage(args, false);
       },
       NOTICE: (args) => {
 
@@ -1335,26 +1333,10 @@ class CommandParser extends Writable {
 
 
         */
-        var chan = args.shift();
-
         if( !this.user )
           return this.createError(400, 'please register!');
 
-        var destination = fetchChannel(chan);
-
-        if( !destination ) destination = users[chan];
-
-        if( destination ){
-          var msg = [];
-          msg.push(':'+this.user.username);
-          msg.push('NOTICE');
-          msg.push(chan);
-          msg.push(':'+args.join(' ')+'\n');
-          destination.write(msg.join(' '));
-        } else {
-          inform.debug(chan, args);
-          return this.createError(400, 'no such user or channel');
-        }
+        return this.sendMessage(args, true);
       },
       WHO: (args) => {
         /* RFC 1459 
@@ -1628,6 +1610,33 @@ class CommandParser extends Writable {
       }
     }
 
+  }
+
+  sendMessage(args, notice){
+    var type = notice ? 'NOTICE' : 'PRIVMSG';
+    var chan = args.shift();
+    inform.debug(type, chan, args);
+
+    var destination = fetchChannel(chan);
+    if( destination ){
+      if( destination.mode.n && !this.user.channels[chan] )
+        return this.createError('ERR_CANNOTSENDTOCHAN');
+      //destination set to privmsg channel
+    } else {
+      destination = users[chan];
+      if( !destination )
+        return this.createError('ERR_NOSUCHNICK');
+      //destination set to privmsg user
+    }
+
+    //prepare message
+    var msg = [];
+    msg.push(':'+this.user.username);
+    msg.push(type);
+    msg.push(chan);
+    msg.push(':'+args.join(' ')+'\n');
+    //write message
+    destination.write(msg.join(' '));
   }
 
   createError(err_name, message, name) {

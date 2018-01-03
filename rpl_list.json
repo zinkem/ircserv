@@ -171,6 +171,9 @@
   "373" : { "name" : "RPL_INFOSTART",
             "message" : "reserved" },
   "384" : { "name" : "RPL_MYPORTIS",
-            "message" : "reserved" }
+            "message" : "reserved" },
+  "329" : { "name" : "RPL_CREATIONTIME",
+            "message" : "<chan> <utime>",
+            "note" :  "Bahumut" }
 }
 
