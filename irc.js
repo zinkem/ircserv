@@ -338,8 +338,8 @@ class CommandParser extends Writable {
         });
         this.user.on('close', () => {
           inform.debug('UserPassThrough', username, 'removing user on UPT close');
-          if( users[username] ) {
-            delete users[username];
+          if( users[this.nick] ) {
+            delete users[this.nick];
           }
 
           if( this.user )
@@ -347,8 +347,8 @@ class CommandParser extends Writable {
         });
         this.user.on('end', () => {
           inform.debug('UserPassThrough', username, 'end');
-          if( users[username] ) {
-            delete users[username];
+          if( users[this.nick] ) {
+            delete users[this.nick];
           }
 
           if( this.user )
