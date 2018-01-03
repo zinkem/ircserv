@@ -250,8 +250,12 @@ class CommandParser extends Writable {
         }
 
         if( this.registered() ) {
-          // TODO broadcast to channels:
-          // [':'+old_nick,'NICK',new_nick].join(' ');
+          var mchan = this.user.channels;
+          for( var key in mchan ){
+            inform.debug('NICK', key, args);
+            if( mchan[key] )
+              channels[key].write([':'+old_nick,'NICK',new_nick].join(' ')+'\n');
+          }
         }
       },
       USER: (args) => {
