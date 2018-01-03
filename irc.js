@@ -319,7 +319,17 @@ class CommandParser extends Writable {
           return this.createError('ERR_ALREADYREGISTRED');
 
         this.real_name = real_name;
-        this.user = new PassThrough();
+        this.user = new Transform({
+          transform(data, encoding, callback) {
+            //filter out privmsgs to self (from channels)
+            if( data.toString().startsWith(':'+this.cp.nick) &&
+                data.toString().includes('PRIVMSG')){
+              callback();
+            } else {
+              callback(null, data);
+            }
+          }
+        });
         this.user.channels = {};
         this.user.cp = this; //a better way would be to encapsulate nick, real name etc
 
@@ -1879,7 +1889,7 @@ class CommandParser extends Writable {
     msg.push(':'+this.id);
     msg.push(type);
     msg.push(chan);
-    msg.push(':'+args.join(' ')+'\n');
+    msg.push(args.join(' ')+'\n');
     //write message
     destination.write(msg.join(' '));
   }
