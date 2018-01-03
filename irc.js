@@ -94,7 +94,7 @@ function clientSubscribe(channel, client_socket) {
     }
 
     //grant ops to first channel member
-    channels[channel].mode.o[client_socket.username] = true;
+    channels[channel].mode.o[client_socket.cp.nick] = true;
   }
 
   channels[channel].pipe(client_socket);
@@ -112,7 +112,8 @@ function fetchChannel(channel) {
 }
 
 function validNick(nick) {
-  return nick.length < 16;
+  return nick.length < 16 &&
+    nick.match(/^[a-zA-Z]+[a-zA-Z0-9_]*$/);
 }
 
 var server_string = 'fibonaut.com'
@@ -123,9 +124,11 @@ class CommandParser extends Writable {
     super(opts)
     this.socket = sock;
     this.user = null;
-    this.id = 'unregistered'
+    this.id = null;
     this.con_pass = null;
     this.hostname = sock.remoteAddress;
+    this.nick = null;
+    this.real_name = null;
 
     var lookup_addr = sock.remoteAddress;
 
@@ -183,7 +186,7 @@ class CommandParser extends Writable {
       },
       NICK: (args) => {
         /* RFC 1459
-           4.1.2 Nick message           STATUS finished until SERVER
+           4.1.2 Nick message           STATUS needs channel broadcast
 
            Command: NICK
            Parameters: <nickname> [ <hopcount> ]
@@ -222,30 +225,34 @@ class CommandParser extends Writable {
         if( args.length < 1 )
           return this.createError('ERR_NONICKNAMEGIVEN',null,true);
 
-        var new_name = args[0];
+        var new_nick = args[0];
 
         //is this a valid nickname?
-        if( !validNick(new_name) ) {
+        if( !validNick(new_nick) ) {
           return this.createError('ERR_ERRONEUSNICKNAME',null,true)
-            .replace('<nick>', new_name);
+            .replace('<nick>', new_nick);
         }
 
         //is someone using this name already?
-        if( users[new_name] ) {
+        if( users[new_nick] ) {
           return this.createError('ERR_NICKNAMEINUSE',null,true)
-            .replace('<nick>', new_name);
+            .replace('<nick>', new_nick);
         }
 
-        var old_name = new_name;
-        if( this.user ){
-          old_name = this.user.username;
-          this.user.username = new_name;
-          users[new_name] = this.user;
-          delete users[old_name];
-        }
-        this.id = new_name;
+        var old_nick = this.nick;
+        this.nick = new_nick;
 
-        return [':'+old_name,'NICK',new_name].join(' ');
+        //registration success, case 2
+        if( this.user && !users[new_nick] ){
+          this.id = new_nick+'!~'+this.user.username+'@'+this.hostname;
+          this.socket.write(this.welcomeMessage()+'\n');
+          users[new_nick] = this.user;
+        }
+
+        if( this.registered() ) {
+          // TODO broadcast to channels:
+          // [':'+old_nick,'NICK',new_nick].join(' ');
+        }
       },
       USER: (args) => {
         /* RFC 1459 
@@ -308,17 +315,13 @@ class CommandParser extends Writable {
         var real_name = args.join(' ').slice(1).trim();
 
         //is this connection already registered?
-        if( this.user )
+        if( this.registered() )
           return this.createError('ERR_ALREADYREGISTRED');
 
-        //does username exist?
-        if( users[username] ) {
-          return this.createError('ERR_NICKNAMEINUSE',null,true)
-            .replace('<nick>', username);
-        }
-
+        this.real_name = real_name;
         this.user = new PassThrough();
         this.user.channels = {};
+        this.user.cp = this; //a better way would be to encapsulate nick, real name etc
 
         this.user.on('pipe', (src) => {
           //src.name, src assumed to be a channel...
@@ -353,26 +356,15 @@ class CommandParser extends Writable {
         });
 
         this.user.username = username;
-        this.id = username+'!~'+username+'@'+this.hostname;
-        users[username] = this.user
+
+        //on successful nick, registration success, case 1
+        if( this.nick && !users[this.nick] ) {
+          this.id = this.nick+'!~'+username+'@'+this.hostname;
+          this.socket.write(this.welcomeMessage() + '\n');
+          users[this.nick] = this.user;
+        }
 
         this.user.pipe(this.socket, { end: false });
-
-        var str_001 = [ ':'+server_string,
-                        '001',
-                        username,
-                        ':Welcome to '+server_string+' irc server!'].join(' ');
-        var str_002 = [ ':'+server_string,
-                        '002',
-                        username,
-                        ':Your host is '+this.hostname+'' ].join(' ');
-        var str_003 = [ ':'+server_string,
-                        '003',
-                        username,
-                        ':This server was created at',
-                        CREATION_TIME].join(' ');
-
-        return [str_001, str_002, str_003].join('\n');
       },
       SERVER: (args) => {
         /* RFC 1459 
@@ -631,7 +623,6 @@ class CommandParser extends Writable {
 
         var chan = args[0];
         var user = this.user;
-        if( !user ) return this.createError(400, 'please register!');
 
         //user banned from channel?
 
@@ -830,8 +821,7 @@ class CommandParser extends Writable {
         var mode = chan_stream.mode;
 
         if( flags ){
-
-          if( !mode.o[this.user.username] )
+          if( !mode.o[this.nick] )
             return this.createError('ERR_CHANOPRIVSNEEDED').replace('<channel>', chan)
 
           inform.debug(params);
@@ -885,7 +875,7 @@ class CommandParser extends Writable {
               }
             }
           }
-          chan_stream.write( [ ':'+this.user.username , 'MODE', args.join(' ') ].join(' ')+'\n' );
+          chan_stream.write( [ ':'+this.id , 'MODE', args.join(' ') ].join(' ')+'\n' );
         }
 
         return [ this.createReply('RPL_CHANNELMODEIS', chan+' '+modeString(mode)),
@@ -923,12 +913,12 @@ class CommandParser extends Writable {
           return this.createError('ERR_NEEDMOREPARAMS').replace('<command>', 'TOPIC');
 
         var chan = args[0];
-        var username = this.user.username;
+        var nick = this.nick;
 
         if( !this.user.channels[chan] )
           return this.createError('ERR_NOTONCHANNEL').replace('<channel>', chan);
 
-        if( args[1] && channels[chan].mode.t && !channels[chan].mode.o[username]){
+        if( args[1] && channels[chan].mode.t && !channels[chan].mode.o[nick]){
           //check for user op privileges
           return this.createError('ERR_CHANOPRIVSNEEDED').replace('<channel>', chan);
         }
@@ -943,9 +933,10 @@ class CommandParser extends Writable {
           var new_topic = args.slice(1);
           channels[chan].topic = ':'+new_topic;
           channels[chan].write(this.createReply('RPL_TOPIC', [chan, channels[chan].topic].join(' '))+'\n');
-        }
 
-        return this.createReply('RPL_TOPIC', [chan, channels[chan].topic].join(' '));
+        } else {
+          return this.createReply('RPL_TOPIC', [chan, channels[chan].topic].join(' '));
+        }
       },
       NAMES: (args) => {
         /* RFC 1459
@@ -999,9 +990,10 @@ class CommandParser extends Writable {
           var result = [];
           var chan_users = channels[chan]._readableState.pipes;
 
-          for( var k in chan_users )
-            if( chan_users[k].username )
-              result.push(chan_users[k].username)
+          for( var k in chan_users ){
+            if( chan_users[k].cp )
+              result.push( chan_users[k].cp.nick )
+          }
 
           result = result.map( x => (channels[chan].mode.o[x] ? '@'
                                      : channels[chan].mode.v[x] ? '+' : '') + x );
@@ -1084,7 +1076,7 @@ class CommandParser extends Writable {
         if( args.length < 2 )
           return this.createError('ERR_NEEDMOREPARAMS').replace('<command>', 'INVITE');
 
-        var user = this.user.username;
+        var user = this.nick;
         var nick = args[0];
         var chan = args[1];
         var chan_stream = channels[chan];
@@ -1177,13 +1169,13 @@ class CommandParser extends Writable {
         }
 
         //channel operator?
-        if( !chan_stream.mode.o[this.user.username] ){
+        if( !chan_stream.mode.o[this.nick] ){
           return this.createError('ERR_CHANOPRIVSNEEDED').replace('<channel>', chan);
         }
 
         clientUnSubscribe(chan, users[nick]);
 
-        chan_stream.write([':'+this.user.username,
+        chan_stream.write([':'+this.nick,
                            'KICK',
                            args.join(' ')].join(' ') + '\n');
       },
@@ -1767,10 +1759,10 @@ class CommandParser extends Writable {
         var dest = args[1];
 
         if( users[dest] ){
-          users[dest].write(':'+this.user.username + ' PING ' + dest);
+          users[dest].write(':'+this.id + ' PING ' + dest);
         }
 
-        return ':admin@'+server_string+' PONG';
+        return 'NOTICE AUTH * PING? PONG!';
       },
       PONG: (args) => {
         /* RFC 1459
@@ -1794,7 +1786,7 @@ class CommandParser extends Writable {
            tolsun.oulu.fi
         */
         inform.debug('PONG', args);
-        return ':admin@'+server_string+' NOTICE * PONG? PING!';
+        return 'NOTICE AUTH * PONG? PING!';
       },
       ERROR: (args) => {
         /* RFC 1459
@@ -1836,6 +1828,29 @@ class CommandParser extends Writable {
 
   }
 
+  registered() {
+    return this.id !== null;
+  }
+
+  welcomeMessage() {
+    //RFC2812
+    var str_001 = [ ':'+server_string,
+                    '001',
+                    this.nick,
+                    ':Hello '+this.real_name+', Welcome to '+server_string+' irc server!'].join(' ');
+    var str_002 = [ ':'+server_string,
+                    '002',
+                    this.nick,
+                    ':You are '+this.id+'' ].join(' ');
+    var str_003 = [ ':'+server_string,
+                    '003',
+                    this.nick,
+                    ':This server was created at',
+                    CREATION_TIME].join(' ');
+
+    return [str_001, str_002, str_003].join('\n');
+  }
+
   sendMessage(args, notice){
     var type = notice ? 'NOTICE' : 'PRIVMSG';
     var chan = args.shift();
@@ -1847,8 +1862,8 @@ class CommandParser extends Writable {
         return this.createError('ERR_CANNOTSENDTOCHAN').replace('<channel name>', chan);
 
       if( destination.mode.m === true &&
-          !(destination.mode.v[this.user.username] ||
-            destination.mode.o[this.user.username]) ){
+          !(destination.mode.v[this.nick] ||
+            destination.mode.o[this.nick]) ){
         return this.createError('ERR_CANNOTSENDTOCHAN').replace('<channel name>', chan);
       }
       //destination set to privmsg channel
@@ -1869,18 +1884,18 @@ class CommandParser extends Writable {
     destination.write(msg.join(' '));
   }
 
-  createError(err_name, message,bypass) {
+  createError(err_name, message, bypass) {
     var err_code = lookup[err_name] || 400;
     var err_message = message ||
         ( err_codes[err_code] ?
           err_codes[err_code].message :
           'Error unknown');
 
-    var err_uname = '__unregistered__';
-    if( this.user && this.user.username )
-      err_uname = this.user.username;
+    var err_uname = '*';
+    if( this.registered() )
+      err_uname = this.nick;
     else if( !bypass )
-      return ':'+server_string+' 400 unregistered :Please Register'
+      return ':'+server_string+' 400 * :Please Register'
 
     return [ ':'+server_string,
              err_code,
@@ -1895,12 +1910,12 @@ class CommandParser extends Writable {
           rpl_codes[rpl_code].message :
           '');
 
-    var rpl_uname = '';
+    var rpl_uname = '*';
 
-    if( this.user && this.user.username )
-      rpl_uname = this.user.username;
+    if( this.registered() )
+      rpl_uname = this.nick;
     else
-      return ':'+server_string+' 400 unregistered :Please Register'
+      return ':'+server_string+' 400 * :Please Register'
 
     return [ ':'+server_string,
              rpl_code,
@@ -1915,8 +1930,15 @@ class CommandParser extends Writable {
     var command = tokens.shift().toUpperCase();
     var result = null;
     inform.debug(command);
-    if( command_list[command] )  {
-      result = command_list[command](tokens)
+    if( command_list[command]) {
+      if( this.registered() ||
+          command === 'NICK' ||
+          command === 'USER' ||
+          command === 'PASS' ) {
+        result = command_list[command](tokens)
+      } else {
+        result = this.createError(400);
+      }
     } else {
       result = this.createError('ERR_UNKNOWNCOMMAND', command+' :Unknown command');
     }
@@ -1927,9 +1949,6 @@ class CommandParser extends Writable {
   _write(data, encoding, callback) {
     var line = data.toString().trim();
     var res = this.parse_command(line.split(' '));
-    var client_id = this.socket.remoteAddress + ' ' + this.socket.remotePort;
-    if( this.user )
-      client_id = this.user.username
 
     if( res ) { 
       this.socket.write(res + '\n');
