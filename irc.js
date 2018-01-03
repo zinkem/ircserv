@@ -68,14 +68,14 @@ function clientSubscribe(channel, client_socket) {
       o - give/take channel operator privileges;                 STATUS complete
       p - private channel flag;                                  STATUS complete
       s - secret channel flag;                                   STATUS complete
-      i - invite-only channel flag;                              STATUS set/unset
+      i - invite-only channel flag;                              STATUS complete
       t - topic settable by channel operator only flag;          STATUS complete
       n - no messages to channel from clients on the outside;    STATUS complete
       m - moderated channel;                                     STATUS complete
-      l - set the user limit to channel;                         STATUS set/unset -l broken
+      l - set the user limit to channel;                         STATUS complete
       b - set a ban mask to keep users out;                      STATUS incomplete
       v - give/take the ability to speak on a moderated channel; STATUS complete
-      k - set a channel key (password).                          STATUS set/unset
+      k - set a channel key (password).                          STATUS complete
     */
     channels[channel].mode = {
       o : {},
@@ -88,7 +88,8 @@ function clientSubscribe(channel, client_socket) {
       l : 100,
       b : '',
       v : {},
-      k : ''
+      k : '',
+      invited : {}
     }
 
     //grant ops to first channel member
@@ -527,7 +528,7 @@ class CommandParser extends Writable {
       },
       JOIN: (args) => {
         /* RFC 1459
-           4.2.1 Join message           STATUS incomplete error handling
+           4.2.1 Join message           STATUS 90% complete, todo: lists and bans
 
            Command: JOIN
            Parameters: <channel>{,<channel>} [<key>{,<key>}]
@@ -586,12 +587,36 @@ class CommandParser extends Writable {
 
         */
 
+        if( args.length < 1 ){
+          return this.createError('ERR_NEEDMOREPARAMS');
+        }
+
         var chan = args[0];
         var user = this.user;
         if( !user ) return this.createError(400, 'please register!');
 
+        //user banned from channel?
+
+        //invite only channel?
         if( channels[chan] &&
-            channels[chan]._readableState.pipes.length > channels[chan].mode.l ) {
+            channels[chan].mode.i === true &&
+            !channels[chan].mode.invited[user.username] ) {
+          return this.createError('ERR_INVITEONLYCHAN').replace('<channel>', chan);
+        }
+
+        //channel key?
+        if( channels[chan] &&
+            channels[chan].mode.k.length > 0 ) {
+          var pass = args[1];
+
+          if( channels[chan].mode.k !== pass )
+            return this.createError('ERR_BADCHANNELKEY').replace('<channel>', chan);
+        }
+
+        //is channel full?
+        if( channels[chan] &&
+            channels[chan]._readableState.pipes.length > channels[chan].mode.l &&
+            channels[chan].mode.l > 0 ) {
           return this.createError('ERR_CHANNELISFULL');
         }
 
@@ -987,7 +1012,7 @@ class CommandParser extends Writable {
       },
       INVITE: (args) => {
         /* RFC 1459
-           4.2.7 Invite message         STATUS not implemented
+           4.2.7 Invite message         STATUS finished (compliance ~)
 
            Command: INVITE
            Parameters: <nickname> <channel>
@@ -1016,7 +1041,42 @@ class CommandParser extends Writable {
            #Twilight_zone
 
         */
-        return this.createError(400, 'INVITE not yet implemented');
+        if( args.length < 2 )
+          return this.createError('ERR_NEEDMOREPARAMS');
+
+        var user = this.user.username;
+        var nick = args[0];
+        var chan = args[1];
+        var chan_stream = channels[chan];
+
+        //does nick exist?
+        if( !users[nick] ){
+          return this.createError('ERR_NOSUCHNICK').replace('<nickname>', nick);
+        }
+
+        //does channel exist? is current user on target channel?
+        if( !chan_stream && this.users.channels[chan] ){
+          return this.createError('ERR_NOTONCHANNEL').replace('<channel>', chan);
+        }
+
+        //is nick already on channel?
+        if( users[nick].channels[chan] ) {
+          return this.createError('ERR_USERONCHANNEL')
+            .replace('<user>', nick)
+            .replace('<channel>', chan);
+        }
+
+        //is current user a channel operator?
+        if( !chan_stream.mode.o[user] ){
+          return this.createError('ERR_CHANOPRIVSNEEDED').replace('<channel>', chan);
+        }
+
+        chan_stream.mode.invited[nick] = true;
+        users[nick].write(':'+user+' INVITE '+args.join(' '));
+
+        return this.createReply('RPL_INVITING')
+          .replace('<nick>', nick)
+          .replace('<channel>', chan);
       },
       KICK: (args) => {
         /* RFC 1459
