@@ -21,7 +21,7 @@ inform.error = function() { var err = Array.prototype.concat.apply(['ERROR!!!'],
 inform.pipe(proc.stdout);
 
 const PORT = proc.argv[2] || 6667;
-const VERSION_STRING = '0.01 wirc :alpha';
+const VERSION_STRING = 'wirc.0.0.1-alpha';
 const CREATION_TIME = new Date().toString();
 inform.log([VERSION_STRING, 'started at', CREATION_TIME].join(' '));
 
@@ -1089,7 +1089,7 @@ class CommandParser extends Writable {
           this.socket.write(this.createReply('RPL_LIST')
                             .replace(/<channel>/g, chanlist[k])
                             .replace(/:<topic>/g, channels[chanlist[k]].topic)
-                            .replace(/<# visible>/g, '*')+'\n')
+                            .replace(/<# visible>/g, channels[chanlist[k]]._readableState.pipes.length)+'\n')
         }
 
         return this.createReply('RPL_LISTEND');
@@ -1641,8 +1641,31 @@ class CommandParser extends Writable {
            "jto*" if they are an operator.
 
         */
-        var userlist = Object.keys(users).join(' ');
-        return this.createReply('RPL_WHOREPLY',userlist);
+
+        //ignoring args...
+        for( var i in users ) {
+          var cuser = users[i];
+          var u = cuser.username,
+              h = cuser.cp.hostname,
+              s = server_string,
+              n = cuser.cp.nick,
+              hc = '*',
+              r = cuser.cp.real_name;
+
+          for( var c in cuser.channels ){
+            var ch = c;
+            this.socket.write(this.createReply('RPL_WHOREPLY')
+                              .replace('<channel>', ch)
+                              .replace('<user>', u)
+                              .replace('<host>', h)
+                              .replace('<server>', s)
+                              .replace('<nick>', n)
+                              .replace('<H|G>[*][@|+]', 'G')
+                              .replace('<hopcount>', '*')
+                              .replace('<real name>', r)+'\n');
+          }
+        }
+        return this.createReply('RPL_ENDOFWHO').replace('<name>', '*');
       },
       WHOIS: (args) => {
         /* RFC 1459
