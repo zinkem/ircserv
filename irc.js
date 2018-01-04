@@ -673,38 +673,48 @@ class CommandParser extends Writable {
           return this.createError('ERR_NEEDMOREPARAMS').replace('<command>', 'JOIN');;
         }
 
-        var chan = args[0];
         var user = this.user;
+        var chans_csv = args[0];
+        chans_csv = chans_csv.replace(':','');
 
-        //user banned from channel?
+        var chan_list = chans_csv.split(',');
 
-        //invite only channel?
-        if( channels[chan] &&
-            channels[chan].mode.i === true &&
-            !channels[chan].mode.invited[user.username] ) {
-          return this.createError('ERR_INVITEONLYCHAN').replace('<channel>', chan);
+        console.log(chan_list);
+
+        for( var k in chan_list ) {
+          var chan = chan_list[k].toLowerCase();
+
+          //user banned from channel?
+
+          //invite only channel?
+          if( channels[chan] &&
+              channels[chan].mode.i === true &&
+              !channels[chan].mode.invited[user.username] ) {
+            return this.createError('ERR_INVITEONLYCHAN').replace('<channel>', chan);
+          }
+
+          //channel key?
+          if( channels[chan] &&
+              channels[chan].mode.k.length > 0 ) {
+            var pass = args[1];
+
+            if( channels[chan].mode.k !== pass )
+              return this.createError('ERR_BADCHANNELKEY').replace('<channel>', chan);
+          }
+
+          //is channel full?
+          if( channels[chan] &&
+              channels[chan]._readableState.pipes.length > channels[chan].mode.l &&
+              channels[chan].mode.l > 0 ) {
+            return this.createError('ERR_CHANNELISFULL');
+          }
+
+          clientSubscribe(chan, user);
+          channels[chan].write(':'+this.id+' JOIN :'+chan+'\n');
+
+          this.socket.write(this.command_list.TOPIC([ chan ])+'\n');
+          this.command_list.NAMES([ chan ]);
         }
-
-        //channel key?
-        if( channels[chan] &&
-            channels[chan].mode.k.length > 0 ) {
-          var pass = args[1];
-
-          if( channels[chan].mode.k !== pass )
-            return this.createError('ERR_BADCHANNELKEY').replace('<channel>', chan);
-        }
-
-        //is channel full?
-        if( channels[chan] &&
-            channels[chan]._readableState.pipes.length > channels[chan].mode.l &&
-            channels[chan].mode.l > 0 ) {
-          return this.createError('ERR_CHANNELISFULL');
-        }
-
-        clientSubscribe(chan, user);
-
-        channels[chan].write(':'+this.id+' JOIN :'+chan+'\n');
-        return [ this.command_list.TOPIC([ chan ]), this.command_list.NAMES([ chan ]) ].join('\n');
       },
       PART: (args) => {
         /* RFC 1459 
@@ -1043,8 +1053,12 @@ class CommandParser extends Writable {
           var chan_users = channels[chan]._readableState.pipes;
 
           for( var k in chan_users ){
-            if( chan_users[k].cp )
-              result.push( chan_users[k].cp.nick )
+            if( chan_users[k] ) {
+              if( chan_users[k].cp )
+                result.push( chan_users[k].cp.nick )
+            } else {
+              inform.error('chan_users', chan, k, chan_users[k]);
+            }
           }
 
           result = result.map( x => (channels[chan].mode.o[x] ? '@'
