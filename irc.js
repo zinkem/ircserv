@@ -186,7 +186,7 @@ class CommandParser extends Writable {
       },
       NICK: (args) => {
         /* RFC 1459
-           4.1.2 Nick message           STATUS needs channel broadcast
+           4.1.2 Nick message           STATUS finished until SERVER
 
            Command: NICK
            Parameters: <nickname> [ <hopcount> ]
@@ -241,20 +241,55 @@ class CommandParser extends Writable {
 
         var old_nick = this.nick;
         this.nick = new_nick;
+        inform.debug('NICK', old_nick, new_nick, this.id);
 
-        //registration success, case 2
-        if( this.user && !users[new_nick] ){
-          this.id = new_nick+'!~'+this.user.username+'@'+this.hostname;
+        if( !this.user ){
+          //first nick, not ready for registration needs no response
+          //registration will complete in USER, case 1
+          return;
+        }
+
+        //registration success, case 2 (first nick rejected, user succeeded)
+        if( !old_nick && this.user ){
           this.socket.write(this.welcomeMessage()+'\n');
-          users[new_nick] = this.user;
+        }
+
+        //assign new id and add new_nick to users map
+        this.id = new_nick+'!~'+this.user.username+'@'+this.hostname;
+        users[new_nick] = this.user;
+
+        //remove user entry for old nick
+        if( old_nick ){
+          delete users[old_nick];
         }
 
         if( this.registered() ) {
+
           var mchan = this.user.channels;
           for( var key in mchan ){
             inform.debug('NICK', key, args);
-            if( mchan[key] )
+
+            if( mchan[key] ) {
+              var mode = channels[key].mode;
+
+              //change mode keys
+              if( mode.o[old_nick] ){
+                mode.o[new_nick] = true;
+                delete mode.o[old_nick];
+              }
+
+              if( mode.v[old_nick] ){
+                mode.v[new_nick] = true;
+                delete mode.v[old_nick];
+              }
+
+              if( mode.invited[old_nick] ){
+                delete mode.o[old_nick];
+              }
+
+              //broadcast nick change to channel
               channels[key].write([':'+old_nick,'NICK',new_nick].join(' ')+'\n');
+            }
           }
         }
       },
@@ -371,7 +406,7 @@ class CommandParser extends Writable {
 
         this.user.username = username;
 
-        //on successful nick, registration success, case 1
+        //registration success, case 1, first nick successful
         if( this.nick && !users[this.nick] ) {
           this.id = this.nick+'!~'+username+'@'+this.hostname;
           this.socket.write(this.welcomeMessage() + '\n');
@@ -1776,7 +1811,7 @@ class CommandParser extends Writable {
           users[dest].write(':'+this.id + ' PING ' + dest);
         }
 
-        return 'NOTICE AUTH * PING? PONG!';
+        return ':'+server_string+' PONG';
       },
       PONG: (args) => {
         /* RFC 1459
@@ -1800,7 +1835,7 @@ class CommandParser extends Writable {
            tolsun.oulu.fi
         */
         inform.debug('PONG', args);
-        return 'NOTICE AUTH * PONG? PING!';
+        return 'NOTICE AUTH :PONG? PING!';
       },
       ERROR: (args) => {
         /* RFC 1459
