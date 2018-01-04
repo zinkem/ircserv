@@ -55,6 +55,9 @@ function modeString(mode) {
   return result;
 }
 
+const AVAIL_USER_MODES = '-';
+const AVAIL_CHAN_MODES = 'opsitnmlvk';
+
 function clientSubscribe(channel, client_socket) {
   channel = channel.toLowerCase();
   if( !channels[channel] ) {
@@ -1883,21 +1886,15 @@ class CommandParser extends Writable {
 
   welcomeMessage() {
     //RFC2812
-    var str_001 = [ ':'+server_string,
-                    '001',
-                    this.nick,
-                    ':Hello '+this.real_name+', Welcome to '+server_string+' irc server!'].join(' ');
-    var str_002 = [ ':'+server_string,
-                    '002',
-                    this.nick,
-                    ':You are '+this.id+'' ].join(' ');
-    var str_003 = [ ':'+server_string,
-                    '003',
-                    this.nick,
-                    ':This server was created at',
-                    CREATION_TIME].join(' ');
-
-    return [str_001, str_002, str_003].join('\n');
+    var welcome = this.createReply('RPL_WELCOME').replace('<nick>!<user>@<host>', this.id);
+    var yourhost = this.createReply('RPL_YOURHOST').replace('<servername>', server_string)
+        .replace('<ver>', VERSION_STRING);
+    var created = this.createReply('RPL_CREATED').replace('<date>', CREATION_TIME);
+    var myinfo = this.createReply('RPL_MYINFO').replace('<servername>', server_string)
+        .replace('<version>', VERSION_STRING)
+        .replace('<available user modes>', AVAIL_USER_MODES)
+        .replace('<available channel modes>', AVAIL_CHAN_MODES);
+    return [ welcome, yourhost, created, myinfo ].join('\n');
   }
 
   sendMessage(args, notice){
