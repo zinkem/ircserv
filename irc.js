@@ -470,6 +470,18 @@ class CommandParser extends Writable {
            for csd.bu.edu which is 5 hops away.
 
         */
+
+        //Parameters: <servername> <hopcount> <info>
+        if( args.length < 3 ) {
+          return this.createError('ERR_NEEDMOREPARAMS').replace('<command>', 'SERVER');
+        }
+        var servername = args[0];
+        var hopcount = args[1];
+        var info = args[2];
+
+        //upstream_servers.push('servername')
+        //downstream_server.write('server servername hopcount++ info')
+
         return this.createError(400, 'SEVRER not yet implemented');
       },
       OPER: (args) => {
@@ -500,6 +512,9 @@ class CommandParser extends Writable {
            using a username of "foo" and "bar" as
            the password.
         */
+
+        //requires user modes
+
         return this.createError(400, 'OPER not yet implemented');
       },
       QUIT: (args) => {
@@ -1809,6 +1824,12 @@ class CommandParser extends Writable {
            with KILL message.  In an ideal world not even operators would need
            to do this and it would be left to servers to deal with.
         */
+        //requires user modes, oper
+        //is this user a server op?
+        //purge user from users list
+        //purge user from chanops?
+        //purge user from invite?
+        //purse user from voice?
         return this.createError(400, 'KILL not yet implemented');
       },
       PING: (args) => {
