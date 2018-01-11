@@ -559,7 +559,7 @@ class CommandParser extends Writable {
           inform.debug(key);
           if( mchan[key] )
             channels[key].write(':'+username + ' QUIT ' +
-                             ' :' + args.join(' ') + '\n');
+                                ' :' + args.join(' ') + '\n');
         }
         this.user.end();
         this.user.emit('end');
@@ -730,6 +730,8 @@ class CommandParser extends Writable {
           this.socket.write(this.command_list.TOPIC([ chan ])+'\n');
           this.command_list.NAMES([ chan ]);
         }
+
+        return this.createReply('RPL_CREATIONTIME', chan+' '+channels[chan].created);
       },
       PART: (args) => {
         /* RFC 1459 
@@ -880,9 +882,6 @@ class CommandParser extends Writable {
            the OPER command.
         */
 
-        //channel mode args[0] = channel (4.2.3.1)
-        //user mode args[0] = nickname (4.2.3.2)
-
         if( args.length < 1)
           return this.createError('ERR_NEEDMOREPARAMS').replace('<command>', 'MODE');
 
@@ -890,74 +889,16 @@ class CommandParser extends Writable {
         var flags = args[1];
         var params = args.slice(2);
 
-        var chan_stream = channels[chan];
-        if( !chan_stream ){
-          return this.createError('ERR_NOTONCHANNEL').replace('<channel>', chan);
+        //channel mode args[0] = channel (4.2.3.1)
+        if( channels[chan] )
+          return this.configModeChannel(chan, flags, params);
+
+        //user mode args[0] = nickname (4.2.3.2)
+        if( users[chan] ){
+          return this.configModeUser(chan, flags, params);
         }
 
-        var mode = chan_stream.mode;
-
-        if( flags ){
-          if( !mode.o[this.nick] )
-            return this.createError('ERR_CHANOPRIVSNEEDED').replace('<channel>', chan)
-
-          inform.debug(params);
-          inform.debug(flags);
-          if( flags[0] === '+' ) {
-            //+
-            flags = flags.substring(1);
-            for( var i in flags ){
-              var op = flags[i];
-              inform.debug('set', op, mode[op]);
-
-              if( mode[op] === false) {
-                mode[op] = true;
-              } else {
-                if( op === 'o' || op === 'v') {
-                  var u = params.shift();
-                  mode[op][u] = true;
-                  inform.debug('set',op, u);
-                } else if( op === 'l' || op === 'k' ) {
-                  var u = params.shift();
-                  mode[op] = u;
-                  inform.debug('set',op, u);
-                } else {
-                  inform.debug('no op', op);
-                }
-              }
-            }
-          } else if( flags[0] === '-' ) {
-            //-
-            flags = flags.substring(1);
-            for( var i in flags ){
-              var op = flags[i];
-              inform.debug('unset', op, mode[op]);
-
-              if( mode[op] && mode[op] === true) {
-                mode[op] = false;
-              } else {
-                if( op === 'o' || op === 'v') {
-                  var u = params.shift();
-                  mode[op][u] = false;
-                  inform.debug('unset',op, u);
-                } else if( op === 'l' ) {
-                  mode.l = -1;
-                  inform.debug('unset',op,'-1');
-                } else if( op === 'k' ) {
-                  mode.k = '';
-                  inform.debug('unset',op,'');
-                } else {
-                  inform.debug('no op', op);
-                }
-              }
-            }
-          }
-          chan_stream.write( [ ':'+this.id , 'MODE', args.join(' ') ].join(' ')+'\n' );
-        }
-
-        return [ this.createReply('RPL_CHANNELMODEIS', chan+' '+modeString(mode)),
-                 this.createReply('RPL_CREATIONTIME', chan+' '+chan_stream.created)
-               ].join('\n');
+        return this.createError('ERR_NOSUCHNICK').replace('<nickname>', chan);
       },
       TOPIC: (args) => {
         /* RFC 1459 
@@ -1955,6 +1896,98 @@ class CommandParser extends Writable {
     return [ welcome, yourhost, created, myinfo ].join('\n');
   }
 
+  configModeChannel(chan, flags, params) {
+    var chan_stream = channels[chan];
+    var mode = chan_stream.mode;
+
+    if( flags ){
+      if( !mode.o[this.nick] )
+        return this.createError('ERR_CHANOPRIVSNEEDED').replace('<channel>', chan)
+
+      inform.debug(params);
+      inform.debug(flags);
+      if( flags[0] === '+' ) {
+        //+
+        flags = flags.substring(1);
+        for( var i in flags ){
+          var op = flags[i];
+          inform.debug('set', op, mode[op]);
+
+          if( mode[op] === false) {
+            mode[op] = true;
+          } else {
+            if( op === 'o' || op === 'v') {
+              var u = params.shift();
+              mode[op][u] = true;
+              inform.debug('set',op, u);
+            } else if( op === 'l' || op === 'k' ) {
+              var u = params.shift();
+              mode[op] = u;
+              inform.debug('set',op, u);
+            } else {
+              inform.debug('no op', op);
+            }
+          }
+        }
+      } else if( flags[0] === '-' ) {
+        //-
+        flags = flags.substring(1);
+        for( var i in flags ){
+          var op = flags[i];
+          inform.debug('unset', op, mode[op]);
+
+          if( mode[op] && mode[op] === true) {
+            mode[op] = false;
+          } else {
+            if( op === 'o' || op === 'v') {
+              var u = params.shift();
+              mode[op][u] = false;
+              inform.debug('unset',op, u);
+            } else if( op === 'l' ) {
+              mode.l = -1;
+              inform.debug('unset',op,'-1');
+            } else if( op === 'k' ) {
+              mode.k = '';
+              inform.debug('unset',op,'');
+            } else {
+              inform.debug('no op', op);
+            }
+          }
+        }
+      }
+      chan_stream.write( [ ':'+this.id , 'MODE', chan, flags, params.join(' ') ].join(' ')+'\n' );
+    }
+
+    return this.createReply('RPL_CHANNELMODEIS', chan+' '+modeString(mode));
+
+  }
+
+  configModeUser(nick, flags, params) {
+    let user_stream = users[nick];
+    console.log(flags);
+    console.log(params);
+
+    if( !user_stream.mode )
+      user_stream.mode = {};
+
+    if( flags ) {
+      let op = flags[0];
+      let modes = flags.substring(1);
+
+      if( op === '-' ) {
+        for( let i in modes )
+          delete user_stream.mode[modes[i]];
+      }
+
+      if( op === '+' ) {
+        for( let i in modes )
+          user_stream.mode[modes[i]] = true;
+      }
+    }
+    return this.createReply('RPL_UMODEIS', nick+' '+modeString(user_stream.mode));
+  }
+
+
   sendMessage(args, notice){
     var type = notice ? 'NOTICE' : 'PRIVMSG';
     var chan = args.shift();
@@ -2067,7 +2100,7 @@ var slc = 0;
 class StreamLines extends Transform {
   /**
      Ensures data recieved at next stream is broken by newline
-   */
+  */
   constructor(opts, linebreak) {
     super(opts)
     this.linebreak = linebreak || '\n';
