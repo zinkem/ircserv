@@ -372,6 +372,7 @@ class CommandParser extends Writable {
             }
           }
         });
+        this.user.mode = {};
         this.user.channels = {};
         this.user.cp = this; //a better way would be to encapsulate nick, real name etc
 
@@ -1615,6 +1616,9 @@ class CommandParser extends Writable {
         //ignoring args...
         for( var i in users ) {
           var cuser = users[i];
+          if( cuser.mode.i === true )
+            break;
+
           var u = cuser.username,
               h = cuser.cp.hostname,
               s = server_string,
@@ -1963,12 +1967,15 @@ class CommandParser extends Writable {
   }
 
   configModeUser(nick, flags, params) {
-    let user_stream = users[nick];
+    console.log(nick, this.nick);
+    if( nick !== this.nick ){
+      return this.createError('ERR_USERSDONTMATCH');
+    }
+
+    let user_stream = this.user;
+
     console.log(flags);
     console.log(params);
-
-    if( !user_stream.mode )
-      user_stream.mode = {};
 
     if( flags ) {
       let op = flags[0];
