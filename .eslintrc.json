@@ -1,0 +1,8 @@
+{
+  "extends": "airbnb-base",
+  "rules": {
+    "camelcase": [0, {"properties": "never"}],
+    "no-console": ["off"],
+    "no-underscore-dangle": ["off"]
+  }
+}
