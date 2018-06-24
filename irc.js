@@ -8,8 +8,36 @@ const {
 const net = require('net');
 const proc = require('process');
 const dns = require('dns');
+const fs = require('fs');
 
-const DEBUG_MODE = true;
+const DEBUG_MODE = false;
+
+const LOGS_DIR = './logs';
+const SERVER_LOG = `${LOGS_DIR}/ircserv.log`;
+const PORT = proc.argv[2] || 6667;
+const VERSION_STRING = 'wirc.0.0.1-alpha';
+const CREATION_TIME = new Date().toString();
+
+if (fs.existsSync(LOGS_DIR)) {
+  const logdir = fs.statSync(LOGS_DIR);
+  if (!logdir.isDirectory()) {
+    console.error(`${LOGS_DIR} is not a directory`);
+    proc.exit(1);
+  }
+} else {
+  fs.mkdir(LOGS_DIR, (err) => {
+    if (err) {
+      console.error(err);
+      proc.exit(1);
+    }
+  });
+}
+
+process.on('uncaughtException', (err) => {
+  console.error(err);
+  process.exit(1);
+});
+
 const inform = new Transform({
   transform(data, encoding, callback) {
     const xdata = [Date.now(), '[SERVER]', data, '\n'].join(' ');
@@ -22,11 +50,8 @@ inform.error = (...args) => {
   const err = Array.prototype.concat.apply(['ERROR!!!'], args);
   console.log.apply(null, err);
 };
-inform.pipe(proc.stdout);
+inform.pipe(fs.createWriteStream(SERVER_LOG));
 
-const PORT = proc.argv[2] || 6667;
-const VERSION_STRING = 'wirc.0.0.1-alpha';
-const CREATION_TIME = new Date().toString();
 inform.log([VERSION_STRING, 'started at', CREATION_TIME].join(' '));
 
 const err_codes = require('./err_list.json');
@@ -67,7 +92,8 @@ function clientSubscribe(chan_id, client_socket) {
   const channel = chan_id.toLowerCase();
   if (!channels[channel]) {
     channels[channel] = new PassThrough();
-    channels[channel].pipe(proc.stdout);
+    channels[channel].setMaxListeners(100);
+    channels[channel].pipe(fs.createWriteStream(`${LOGS_DIR}/ircserv_${channel}.ircservlog`));
     channels[channel].name = channel;
     channels[channel].topic = `:Welcome to ${channel}`;
     channels[channel].created = Math.floor(Date.now() / 1000);
@@ -376,7 +402,7 @@ class CommandParser extends Writable {
         this.user.mode = {};
         this.user.channels = {};
         this.user.cp = this; // a better way would be to encapsulate nick, real name etc
-
+        this.user.setMaxListeners(30);
         this.user.on('pipe', (src) => {
           // src.name, src assumed to be a channel...
           inform.debug('UserPassThrough', username, 'pipe', src.name);
@@ -1015,13 +1041,10 @@ class CommandParser extends Writable {
           }
 
           let result = [];
-          const chan_users = channels[chan]._readableState.pipes;
-          Object.keys(chan_users).forEach((k) => {
-            if (chan_users[k]) {
-              if (chan_users[k].cp) result.push(chan_users[k].cp.nick);
-            } else {
-              inform.error('chan_users', chan, k, chan_users[k]);
-            }
+          let chan_users = channels[chan]._readableState.pipes;
+          if (!(chan_users instanceof Array)) chan_users = [chan_users];
+          chan_users.forEach((subscriber) => {
+            if (subscriber.cp) result.push(subscriber.cp.nick);
           });
 
           result = result.map(prefix_mode(chan));
@@ -1907,6 +1930,10 @@ class CommandParser extends Writable {
       .replace('<version>', VERSION_STRING)
       .replace('<available user modes>', AVAIL_USER_MODES)
       .replace('<available channel modes>', AVAIL_CHAN_MODES);
+
+    const { remoteAddress, remotePort } = this.socket;
+    inform.log(`[${remoteAddress}]:${remotePort} registered ${this.nick}`);
+
     return [welcome, yourhost, created, myinfo].join('\n');
   }
 
