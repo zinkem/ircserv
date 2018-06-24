@@ -33,6 +33,11 @@ if (fs.existsSync(LOGS_DIR)) {
   });
 }
 
+process.on('uncaughtException', (err) => {
+  console.error(err);
+  process.exit(1);
+});
+
 const inform = new Transform({
   transform(data, encoding, callback) {
     const xdata = [Date.now(), '[SERVER]', data, '\n'].join(' ');
