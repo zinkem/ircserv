@@ -5,7 +5,7 @@
   "main": "irc.js",
   "scripts": {
     "lint": "eslint irc.js",
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "test": "mocha"
   },
   "author": "",
   "license": "ISC",
@@ -13,6 +13,7 @@
   "devDependencies": {
     "eslint": "^4.19.1",
     "eslint-config-airbnb-base": "^13.0.0",
-    "eslint-plugin-import": "^2.12.0"
+    "eslint-plugin-import": "^2.12.0",
+    "mocha": "^5.2.0"
   }
 }
