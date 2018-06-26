@@ -2,9 +2,9 @@
   "name": "irc",
   "version": "1.0.0",
   "description": "irc server for node.js",
-  "main": "irc.js",
+  "main": "index.js",
   "scripts": {
-    "lint": "eslint irc.js",
+    "lint": "eslint .",
     "test": "mocha"
   },
   "author": "",

@@ -3,6 +3,8 @@
   "rules": {
     "camelcase": [0, {"properties": "never"}],
     "no-console": ["off"],
-    "no-underscore-dangle": ["off"]
+    "no-underscore-dangle": ["off"],
+    "func-names": ["off"],
+    "no-param-reassign": ["error", { "props": false }]
   }
 }
