@@ -1,5 +1,6 @@
 {
   "logs": "./logs",
   "version": "ircserv.0.0.2-alpha",
-  "servername": "fibonaut.com"
+  "servername": "fibonaut.com",
+  "debug": false
 }
