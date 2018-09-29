@@ -1,4 +1,3 @@
-'use strict';
 const proc = require('process');
 
 const ircserv = require('../');
@@ -20,7 +19,3 @@ setInterval(() => {
   const mem_string = `${proc.memoryUsage().rss / 1000000}M`;
   console.log(`${Object.keys(ircd.users).length} ${mem_string}`);
 }, 30000);
-
-
-
-
