@@ -5,5 +5,10 @@
   "debug": true,
   "operators": {
     "admin":"admin"
+  },
+  "admin_info": {
+    "info1" : "Hello! Welcome to our server!",
+    "info2" : "http://example.com",
+    "email" : "admin@example.com"
   }
 }
