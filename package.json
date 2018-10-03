@@ -6,7 +6,7 @@
   "scripts": {
     "start": "node bin/ircserv.js",
     "lint": "eslint .",
-    "test": "mocha"
+    "test": "nyc mocha"
   },
   "author": "",
   "license": "ISC",
@@ -17,6 +17,7 @@
     "eslint": "^4.19.1",
     "eslint-config-airbnb-base": "^13.0.0",
     "eslint-plugin-import": "^2.12.0",
-    "mocha": "^5.2.0"
+    "mocha": "^5.2.0",
+    "nyc": "^13.0.1"
   }
 }

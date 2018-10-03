@@ -1,102 +1,129 @@
-const child_process = require('child_process');
 const assert = require('assert');
-const net = require('net');
-const { Transform } = require('stream');
+
+const { Duplex } = require('stream');
+
 let server_job = null;
 let server_exit_code = null;
 
-//duplicated code, todo: move to a module
-class StreamLines extends Transform {
-  /**
-     Ensures data recieved at next stream is broken by newline
-  */
-  constructor(opts, linebreak) {
-    super(opts);
-    this.linebreak = linebreak || '\n';
-    this.buffer = '';
+const { Server, StreamLines } = require('..');
+
+class IRCAgent extends Duplex {
+  constructor(opts) {
+    super(opts)
+    this.remoteAddress = '::1';
+    this.remotePort = '32000';
+    this.buffer = [];
   }
 
-  _transform(data, encoding, callback) {
-    const input = this.buffer + data.toString('utf8');
-    const lines = input.split('\n');
-    this.buffer = lines.pop();
-    while (lines.length > 0) {
-      const line = lines.shift();
-      this.push(line);
+  _read(size) {
+    const res = this.push(this.buffer.shift());
+  }
+
+  _write(chunk, encoding, callback) {
+    this.emit('response', chunk.toString());
+
+    if( chunk.toString().includes('hostname')) {
+      this.emit('connected');
     }
-
-    callback();
-  }
-
-  _flush(callback) {
-    this.push(`${this.buffer}\n`);
-    callback();
+    callback(null, chunk);
   }
 }
 
+const waitFor = (id, done) => {
+  return function(data) {
+    if(data.toString().includes(id)) {
+      this.removeAllListeners('response');
+      done();
+    }
+  }
+}
+
+
 describe('ircserv basic commands', function() {
   this.timeout(10000);
+  const { Server, StreamLines } = require('..');
+  const mockServer = new Server({
+    "logs": "./testlogs",
+    "version": "ircserv.0.0.2-test",
+    "servername": "test.com",
+    "debug": false,
+    "operators": {
+      "admin":"admin"
+    },
+    "admin_info": {
+      "info1" : "Hello! Welcome to our server!",
+      "info2" : "http://example.com",
+      "email" : "admin@example.com"
+    }
+  });
+  const mockListener = mockServer.createConnectionListener();
+  const mockAgent = new IRCAgent();
+
   before((done) => {
-    console.log('\tStarting server...');
-    server_job = child_process.spawn('node', ['irc.js']);
-    server_job.on('error', (err) => {
-      console.log(err);
-      assert.fail(err);
-    });
+    //console.log('BEFORE!')
 
-    server_job.on('exit', (code, signal) => {
-      console.log('exit', code, signal);
-      server_exit_code = code;
-    });
+    try {
+      mockListener(mockAgent);
+    } catch(e) {
+      console.log(e);
+      assert.equal(e, null);
+    }
 
-    server_job.stdout.pipe(process.stdout);
-    server_job.stderr.pipe(process.stderr);
-    setTimeout(() => {
-      // give server time to start
+    mockAgent.on('connected', (data) => {
+      mockAgent.push('NICK basic\n');
+      mockAgent.push('USER basic 0 * :Test Agent\n');
       done();
-    }, 1000);
+    });
   });
 
   after(() => {
-    server_job.kill();
   });
 
   afterEach(function() {
-    assert.equal(server_exit_code, null, 'Server terminated unexpectedly');
   });
 
-  it('Client connection handshake', function(done) {
-    const client = net.createConnection(6667, 'localhost', () => {
-      console.log('\tClient Connected');
-      client.setEncoding('utf8');
+  it('WHO', function(done) {
+    mockAgent.on('response', waitFor('315', done));
+    mockAgent.push('who\n');
+  });
 
-      const command = new StreamLines();
-      command.on('data', (data) => {
-        client.write(`${data}\n`);
-        console.log(`\t$ ${data}`);
-      });
+  it('JOIN', function(done) {
+    mockAgent.on('response', waitFor('329', done));
+    mockAgent.push('join #cats\n');
+  });
 
-      command.write('NICK basic\n');
-      command.write('USER basic 0 * :Test Agent\n');
+  it('TOPIC', function(done) {
+    mockAgent.on('response', waitFor('fluffy ass cats', done));
+    mockAgent.push('topic #cats :fluffy ass cats\n');
+  });
 
-      const lineparser = new StreamLines();
+  it('MODE', function(done) {
+    mockAgent.on('response', waitFor('+itn', done));
+    mockAgent.push('mode #cats +i\n');
+  });
 
-      client.pipe(lineparser);
-      lineparser.on('data', (data) => {
-        console.log(`\t  ${data}`);
-        if (data.indexOf('004') !== -1) {
-          command.write('quit\n');
-        }
-      });
-      client.on('close', () => {
-        console.log('\tClient Disconnected');
-        done();
-      });
-    });
+  it('PART', function(done) {
+    mockAgent.on('response', waitFor('PART', done));
+    mockAgent.push('part #cats\n');
+  });
 
-    client.on('error', (err) => {
-      console.error('error', err);
-      assert.fail('Connection closed unexpectedly');
-    });
+  it('WHOIS', function(done) {
+    mockAgent.on('response', waitFor('318', done));
+    mockAgent.push('whois basic\n');
+  });
+
+  it('ADMIN', function(done) {
+    mockAgent.on('response', waitFor('259', done));
+    mockAgent.push('admin\n');
+  });
+
+  it('OPER bad pass', function(done) {
+    mockAgent.on('response', waitFor('464', done));
+    mockAgent.push('oper boo boo\n');
+  });
+
+  it('OPER good pass', function(done) {
+    mockAgent.on('response', waitFor('381', done));
+    mockAgent.push('oper admin admin\n');
   });
 });
