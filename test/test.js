@@ -11,7 +11,7 @@ const serverConfigOpts = {
   "logs": "./testlogs",
   "version": "ircserv.0.0.2-test",
   "servername": "test.com",
-  "debug": true,
+  "debug": false,
   "operators": {
     "admin":"admin"
   },
@@ -95,6 +95,79 @@ describe('ircserv basic commands', function() {
   afterEach(function() {
     mockAgent.removeAllListeners('response');
     otherAgent.removeAllListeners('response');
+  });
+
+  it('SEVERAL: ERR_NEEDMOREPARAMS', function(done) {
+    const commands = [
+      'PASS',
+      'USER',
+      'OPER',
+      'JOIN',
+      'PART',
+      'MODE',
+      'TOPIC',
+      'INVITE',
+      'KICK',
+      'KILL',
+    ]
+    otherAgent.on('response', waitFor('461', () => {
+      setImmediate(() => {
+        if (commands.length <= 0)
+          done();
+        else
+          otherAgent.push(`${commands.pop()}\n`);
+      });
+    }));
+    otherAgent.push(`${commands.pop()}\n`);
+  });
+
+  it('PRIVMSG, NOTICE ERR_NORECIPIENT', function(done) {
+    const commands = [
+      'PRIVMSG',
+      'NOTICE',
+    ]
+    otherAgent.on('response', waitFor('411', () => {
+      setImmediate(() => {
+        if (commands.length <= 0)
+          done();
+        else
+          otherAgent.push(`${commands.pop()}\n`);
+      });
+    }));
+    otherAgent.push(`${commands.pop()}\n`);
+  });
+
+  it('PRIVMSG, NOTICE ERR_NOTEXTTOSEND', function(done) {
+    const commands = [
+      'PRIVMSG basic :',
+      'NOTICE basic',
+    ]
+    otherAgent.on('response', waitFor('412', () => {
+      setImmediate(() => {
+        if (commands.length <= 0)
+          done();
+        else
+          otherAgent.push(`${commands.pop()}\n`);
+      });
+    }));
+    otherAgent.push(`${commands.pop()}\n`);
+  });
+
+  it('ERR_NONICKNAMEGIVEN', function(done) {
+    const commands = [
+      'WHOWAS',
+      'WHOIS',
+      'NICK',
+    ]
+    otherAgent.on('response', waitFor('431', () => {
+      setImmediate(() => {
+        if (commands.length <= 0)
+          done();
+        else
+          otherAgent.push(`${commands.pop()}\n`);
+      });
+    }));
+    otherAgent.push(`${commands.pop()}\n`);
   });
 
   it('ADMIN', function(done) {
@@ -231,7 +304,7 @@ describe('ircserv basic commands', function() {
     setTimeout(() => {
       if (!err)
         done();
-    }, 500);
+    }, 100);
   });
 
   it('MODE user -o (remove server op)', function(done) {
