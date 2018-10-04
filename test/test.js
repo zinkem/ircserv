@@ -11,7 +11,7 @@ const serverConfigOpts = {
   "logs": "./testlogs",
   "version": "ircserv.0.0.2-test",
   "servername": "test.com",
-  "debug": false,
+  "debug": true,
   "operators": {
     "admin":"admin"
   },
@@ -167,14 +167,77 @@ describe('ircserv basic commands', function() {
     mockAgent.push('topic #cats :fluffy ass cats\n');
   });
 
+  it('MODE bad flags', function(done) {
+    const badmodes = 'abcdefghjklmnpqrtuvxyz'.split('');
+    otherAgent.on('response', waitFor('501', () => {
+      setImmediate(() => {
+        if (badmodes.length <= 0)
+          done();
+        else
+          otherAgent.push(`mode other +${badmodes.pop()}\n`);
+      });
+    }));
+    otherAgent.push(`mode other +${badmodes.pop()}\n`);
+  });
+
+  it('MODE get user mode', function(done) {
+    otherAgent.on('response', waitFor('221', done));
+    otherAgent.push('mode other +iow\n')
+    otherAgent.push('mode other\n');
+  });
+
+  it('MODE set another user mode fails', function(done) {
+    otherAgent.on('response', waitFor('502', done));
+    otherAgent.push('mode basic +iow\n')
+  });
+
   it('MODE user +i (invisible)', function(done) {
-    otherAgent.on('response', waitFor('other +i', done));
+    otherAgent.on('response', waitFor('other :+i', done));
     otherAgent.push('mode other +i\n');
   });
 
-  it.skip('MODE user -i (invisible)', function(done) {
-    otherAgent.on('response', waitFor('-i', done));
+  it('MODE user -i (invisible)', function(done) {
+    otherAgent.on('response', waitFor(':-i', done));
     otherAgent.push('mode other -i\n');
+  });
+
+  it('MODE user +s (server notices)', function(done) {
+    otherAgent.on('response', waitFor('other :+s', done));
+    otherAgent.push('mode other +s\n');
+  });
+
+  it('MODE user -s (server notices)', function(done) {
+    otherAgent.on('response', waitFor('-s', done));
+    otherAgent.push('mode other -s\n');
+  });
+
+  it('MODE user +w (wallops)', function(done) {
+    otherAgent.on('response', waitFor('other :+w', done));
+    otherAgent.push('mode other +w\n');
+  });
+
+  it('MODE user -w (wallops)', function(done) {
+    otherAgent.on('response', waitFor('-w', done));
+    otherAgent.push('mode other -w\n');
+  });
+
+  it('MODE user +o (server op - not allowed)', function(done) {
+    let err = false;
+    otherAgent.on('response', waitFor('other +o', () => {
+      err = true;
+      done('MODE +o should be ignored');
+    }));
+    otherAgent.push('mode other +o\n');
+    setTimeout(() => {
+      if (!err)
+        done();
+    }, 500);
+  });
+
+  it('MODE user -o (remove server op)', function(done) {
+    otherAgent.on('response', waitFor('-o', done));
+    otherAgent.push('oper admin admin\n');
+    otherAgent.push('mode other -o\n');
   });
 
   it('MODE chan +i (invite) no privs', function(done) {
