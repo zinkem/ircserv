@@ -75,7 +75,7 @@ describe('ircserv basic commands', function() {
 
     mockAgent.on('connected', (data) => {
       mockAgent.push('NICK basic\n');
-      mockAgent.push('USER basic 0 * :Test Agent Mock\n');
+      mockAgent.push('USER basic 0 * :Test Agent basic\n');
       finish();
     });
 
@@ -235,134 +235,6 @@ describe('ircserv basic commands', function() {
   it('TOPIC change', function(done) {
     mockAgent.on('response', waitFor('fluffy ass cats', done));
     mockAgent.push('topic #cats :fluffy ass cats\n');
-  });
-
-  it('MODE bad flags', function(done) {
-    const badmodes = 'abcdefghjklmnpqrtuvxyz'.split('');
-    otherAgent.on('response', waitFor('501', () => {
-      setImmediate(() => {
-        if (badmodes.length <= 0)
-          done();
-        else
-          otherAgent.push(`mode other +${badmodes.pop()}\n`);
-      });
-    }));
-    otherAgent.push(`mode other +${badmodes.pop()}\n`);
-  });
-
-  it('MODE get user mode', function(done) {
-    otherAgent.on('response', waitFor('221', done));
-    otherAgent.push('mode other +iow\n')
-    otherAgent.push('mode other\n');
-  });
-
-  it('MODE set another user mode fails', function(done) {
-    otherAgent.on('response', waitFor('502', done));
-    otherAgent.push('mode basic +iow\n')
-  });
-
-  it('MODE user +i (invisible)', function(done) {
-    otherAgent.on('response', waitFor('other :+i', done));
-    otherAgent.push('mode other +i\n');
-  });
-
-  it('MODE user -i (invisible)', function(done) {
-    otherAgent.on('response', waitFor(':-i', done));
-    otherAgent.push('mode other -i\n');
-  });
-
-  it('MODE user +s (server notices)', function(done) {
-    otherAgent.on('response', waitFor('other :+s', done));
-    otherAgent.push('mode other +s\n');
-  });
-
-  it('MODE user -s (server notices)', function(done) {
-    otherAgent.on('response', waitFor('-s', done));
-    otherAgent.push('mode other -s\n');
-  });
-
-  it('MODE user +w (wallops)', function(done) {
-    otherAgent.on('response', waitFor('other :+w', done));
-    otherAgent.push('mode other +w\n');
-  });
-
-  it('MODE user -w (wallops)', function(done) {
-    otherAgent.on('response', waitFor('-w', done));
-    otherAgent.push('mode other -w\n');
-  });
-
-  it('MODE user +o (server op - not allowed)', function(done) {
-    let err = false;
-    otherAgent.on('response', waitFor('other +o', () => {
-      err = true;
-      done('MODE +o should be ignored');
-    }));
-    otherAgent.push('mode other +o\n');
-    setTimeout(() => {
-      if (!err)
-        done();
-    }, 100);
-  });
-
-  it('MODE user -o (remove server op)', function(done) {
-    otherAgent.on('response', waitFor('-o', done));
-    otherAgent.push('oper admin admin\n');
-    otherAgent.push('mode other -o\n');
-  });
-
-  it('MODE chan +i (invite) no privs', function(done) {
-    otherAgent.on('response', waitFor('482', done));
-    otherAgent.push('mode #cats +i\n');
-  });
-
-  it('MODE chan +i (invite) with privs', function(done) {
-    mockAgent.on('response', waitFor('+i', done));
-    mockAgent.push('mode #cats +i\n');
-  });
-
-  it('MODE chan +o no privs', function(done) {
-    otherAgent.on('response', waitFor('482', done));
-    otherAgent.push('mode #cats +o other\n');
-  });
-
-  it('MODE chan +o with privs', function(done) {
-    mockAgent.on('response', waitFor('MODE #cats +o other', done));
-    mockAgent.push('mode #cats +o other\n');
-  });
-
-  it('MODE chan -o with privs', function(done) {
-    mockAgent.on('response', waitFor('MODE #cats -o other', done));
-    mockAgent.push('mode #cats -o other\n');
-  });
-
-  it('MODE chan +p with privs', function(done) {
-    mockAgent.on('response', waitFor('MODE #cats +p', done));
-    mockAgent.push('mode #cats +p\n');
-  });
-
-  it('MODE chan +s with privs', function(done) {
-    mockAgent.on('response', waitFor('MODE #cats +s', done));
-    mockAgent.push('mode #cats +s other\n');
-  });
-
-  it('MODE chan +m with privs', function(done) {
-    mockAgent.on('response', waitFor('MODE #cats +m', done));
-    mockAgent.push('mode #cats +m\n');
-  });
-
-  it.skip('MODE chan +l with privs', function(done) {
-    mockAgent.on('response', waitFor('MODE #cats +l 30', done));
-    mockAgent.push('mode #cats +l 30\n');
-  });
-
-  it('MODE chan +v with privs', function(done) {
-    mockAgent.on('response', waitFor('MODE #cats +v', done));
-    mockAgent.push('mode #cats +v other\n');
-  });
-
-  it.skip('MODE chan +k with privs', function(done) {
-    mockAgent.on('response', waitFor('MODE #cats +k fookey', done));
-    mockAgent.push('mode #cats +k fookey\n');
   });
 
   it('KICK with privs', function(done) {
