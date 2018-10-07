@@ -8,6 +8,8 @@ const { serverConfigOpts,
 
 const { Server } = require('..');
 
+//serverConfigOpts.debug = true;
+
 describe('Mode Tests', function() {
   let ircserver = null;
   let connectionListener = null;
@@ -17,7 +19,6 @@ describe('Mode Tests', function() {
     ircserver = new Server(serverConfigOpts);
     connectionListener = ircserver.createConnectionListener();
     agent = new IRCAgent('agent');
-    agent.setEncoding('utf8');
     agent.connect(connectionListener, done);
   });
 
@@ -102,15 +103,17 @@ describe('Mode Tests', function() {
     });
   });
 
-  describe('Channel Mode Tests', function() {
+  describe('Channel Mode Tests (no privs)', function() {
 
     beforeEach((done) => {
-      agent.on('response', waitFor('366', done));
+      agent.on('response', waitFor('366', () => {
+        agent.on('response', waitFor('-o', done));
+        agent.send('mode #cats -o agent');
+      }));
       agent.send('join #cats');
     });
 
     it('MODE chan +i (invite) no privs', function(done) {
-      agent.send('mode #cats -o agent');
       agent.on('response', waitFor('482', () => {
         tryAssert.equal(ircserver.getChannel('#cats').mode.i,
                         false,
@@ -118,6 +121,104 @@ describe('Mode Tests', function() {
                         done);
       }));
       agent.send('mode #cats +i');
+    });
+
+    it('MODE chan +o', function(done) {
+      agent.on('response', waitFor('482', () => {
+        tryAssert.equal(ircserver.getChannel('#cats').mode.o['other'],
+                        undefined,
+                        'op set without permissions',
+                        done);
+      }));
+      agent.send('mode #cats +o other');
+    });
+
+    it('MODE chan -o no privs', function(done) {
+      agent.on('response', waitFor('482', () => {
+        tryAssert.equal(ircserver.getChannel('#cats').mode.o['other'],
+                        undefined,
+                        'de-op without permissions',
+                        done);
+      }));
+      agent.send('mode #cats -o other');
+    });
+
+    it('MODE chan +p no privs', function(done) {
+      agent.on('response', waitFor('482', () => {
+        tryAssert.equal(ircserver.getChannel('#cats').mode.p,
+                        false,
+                        'set private unsuccessful',
+                        done);
+      }));
+      agent.send('mode #cats +p');
+    });
+
+    it('MODE chan +s no privs', function(done) {
+      agent.on('response', waitFor('482', () => {
+        tryAssert.equal(ircserver.getChannel('#cats').mode.s,
+                        false,
+                        'secret mode set without premission',
+                        done);
+      }));
+      agent.send('mode #cats +s other');
+    });
+
+    it('MODE chan +m no privs', function(done) {
+      agent.on('response', waitFor('482', () => {
+        tryAssert.equal(ircserver.getChannel('#cats').mode.m,
+                        false,
+                        'moderate changed without permission',
+                        done);
+      }));
+      agent.send('mode #cats +m');
+    });
+
+    it('MODE chan +l no privs', function(done) {
+      agent.on('response', waitFor('482', () => {
+        tryAssert.equal(ircserver.getChannel('#cats').mode.l,
+                        100,
+                        'limit changed without permissions',
+                        done);
+      }));
+      agent.send('mode #cats +l 30');
+    });
+
+    it('MODE chan +v no privs', function(done) {
+      agent.on('response', waitFor('482', () => {
+        tryAssert.equal(ircserver.getChannel('#cats').mode.v['other'],
+                        undefined,
+                        'voice set without permissions',
+                        done);
+      }));
+      agent.send('mode #cats +v other');
+    });
+
+    it('MODE chan +k no privs', function(done) {
+      agent.on('response', waitFor('482', () => {
+        tryAssert.equal(ircserver.getChannel('#cats').mode.k,
+                        '',
+                        'set key without permissions',
+                        done);
+      }));
+      agent.send('mode #cats +k fookey');
+    });
+
+    it('MODE chan -t no privs', function(done) {
+      agent.on('response', waitFor('482', () => {
+        tryAssert.equal(ircserver.getChannel('#cats').mode.t,
+                        true,
+                        'set -t without permissions',
+                        done);
+      }));
+      agent.send('mode #cats -t');
+    });
+  });
+
+  describe('Channel Mode Tests (with privs)', function() {
+
+    beforeEach((done) => {
+      agent.on('response', waitFor('366', done));
+      agent.send('join #cats');
     });
 
     it('MODE chan +i (invite) with privs', function(done) {
@@ -130,19 +231,18 @@ describe('Mode Tests', function() {
       agent.send('mode #cats +i');
     });
 
-    it('MODE chan +o no privs', function(done) {
-      agent.on('response', waitFor('482', () => {
+    it('MODE chan +o with privs', function(done) {
+      agent.on('response', waitFor('MODE #cats +o other', () => {
         tryAssert.equal(ircserver.getChannel('#cats').mode.o['other'],
-                        undefined,
-                        'op set without permissions',
+                        true,
+                        'op unsuccessful',
                         done);
       }));
-      agent.send('mode #cats -o agent');
       agent.send('mode #cats +o other');
     });
 
-    it('MODE chan +o with privs', function(done) {
-      agent.on('response', waitFor('MODE #cats +o other', () => {
+    it.skip('MODE chan +o with privs, user doesnt exist', function(done) {
+      agent.on('response', waitFor('401', () => {
         tryAssert.equal(ircserver.getChannel('#cats').mode.o['other'],
                         true,
                         'op unsuccessful',
@@ -219,6 +319,25 @@ describe('Mode Tests', function() {
                         done);
       }));
       agent.send('mode #cats +k fookey');
+    });
+
+    it('MODE chan +lo with privs', function(done) {
+      const user2 = new IRCAgent('user2');
+      user2.connect(connectionListener, () => {
+        user2.send('join #cats');
+        agent.on('response', waitFor('MODE #cats +lo', () => {
+          tryAssert.equal(ircserver.getChannel('#cats').mode.o['user2'],
+                          true,
+                          'op user2 unsuccessful',
+                          () => {
+                            tryAssert.equal(ircserver.getChannel('#cats').mode.l,
+                                            10,
+                                            'set limit 10 unsuccessful',
+                                            done);
+                          });
+        }));
+        agent.send('mode #cats +lo 10 user2');
+      });
     });
   });
 });
