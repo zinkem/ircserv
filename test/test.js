@@ -2,9 +2,6 @@ const assert = require('assert');
 
 const { Duplex } = require('stream');
 
-let server_job = null;
-let server_exit_code = null;
-
 const { Server, StreamLines } = require('..');
 
 const serverConfigOpts = {
@@ -319,7 +316,7 @@ describe('ircserv basic commands', function() {
   });
 
   it('MODE chan +i (invite) with privs', function(done) {
-    mockAgent.on('response', waitFor('+itn', done));
+    mockAgent.on('response', waitFor('+i', done));
     mockAgent.push('mode #cats +i\n');
   });
 
@@ -336,6 +333,36 @@ describe('ircserv basic commands', function() {
   it('MODE chan -o with privs', function(done) {
     mockAgent.on('response', waitFor('MODE #cats -o other', done));
     mockAgent.push('mode #cats -o other\n');
+  });
+
+  it('MODE chan +p with privs', function(done) {
+    mockAgent.on('response', waitFor('MODE #cats +p', done));
+    mockAgent.push('mode #cats +p\n');
+  });
+
+  it('MODE chan +s with privs', function(done) {
+    mockAgent.on('response', waitFor('MODE #cats +s', done));
+    mockAgent.push('mode #cats +s other\n');
+  });
+
+  it('MODE chan +m with privs', function(done) {
+    mockAgent.on('response', waitFor('MODE #cats +m', done));
+    mockAgent.push('mode #cats +m\n');
+  });
+
+  it.skip('MODE chan +l with privs', function(done) {
+    mockAgent.on('response', waitFor('MODE #cats +l 30', done));
+    mockAgent.push('mode #cats +l 30\n');
+  });
+
+  it('MODE chan +v with privs', function(done) {
+    mockAgent.on('response', waitFor('MODE #cats +v', done));
+    mockAgent.push('mode #cats +v other\n');
+  });
+
+  it.skip('MODE chan +k with privs', function(done) {
+    mockAgent.on('response', waitFor('MODE #cats +k fookey', done));
+    mockAgent.push('mode #cats +k fookey\n');
   });
 
   it('KICK with privs', function(done) {
