@@ -1,5 +1,5 @@
 {
-  "name": "ircd.js",
+  "name": "ircserv",
   "version": "0.8.0",
   "description": "irc server for node.js",
   "main": "index.js",
