@@ -39,7 +39,7 @@
   "332" : { "name" : "RPL_TOPIC",
             "message" : "<channel> :<topic>" },
   "341" : { "name" : "RPL_INVITING",
-            "message" : "<channel> <nick>" },
+            "message" : "<nick> <channel>" },
   "342" : { "name" : "RPL_SUMMONING",
             "message" : "<user> :Summoning user to IRC" },
   "351" : { "name" : "RPL_VERSION",

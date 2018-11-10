@@ -1,2 +1,3 @@
 test/**/*.js
 tester.js
+coverage/**/*.js
