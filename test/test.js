@@ -2,9 +2,6 @@ const assert = require('assert');
 
 const { Duplex } = require('stream');
 
-let server_job = null;
-let server_exit_code = null;
-
 const { Server, StreamLines } = require('..');
 
 const serverConfigOpts = {
@@ -78,7 +75,7 @@ describe('ircserv basic commands', function() {
 
     mockAgent.on('connected', (data) => {
       mockAgent.push('NICK basic\n');
-      mockAgent.push('USER basic 0 * :Test Agent Mock\n');
+      mockAgent.push('USER basic 0 * :Test Agent basic\n');
       finish();
     });
 
@@ -95,6 +92,79 @@ describe('ircserv basic commands', function() {
   afterEach(function() {
     mockAgent.removeAllListeners('response');
     otherAgent.removeAllListeners('response');
+  });
+
+  it('SEVERAL: ERR_NEEDMOREPARAMS', function(done) {
+    const commands = [
+      'PASS',
+      'USER',
+      'OPER',
+      'JOIN',
+      'PART',
+      'MODE',
+      'TOPIC',
+      'INVITE',
+      'KICK',
+      'KILL',
+    ]
+    otherAgent.on('response', waitFor('461', () => {
+      setImmediate(() => {
+        if (commands.length <= 0)
+          done();
+        else
+          otherAgent.push(`${commands.pop()}\n`);
+      });
+    }));
+    otherAgent.push(`${commands.pop()}\n`);
+  });
+
+  it('PRIVMSG, NOTICE ERR_NORECIPIENT', function(done) {
+    const commands = [
+      'PRIVMSG',
+      'NOTICE',
+    ]
+    otherAgent.on('response', waitFor('411', () => {
+      setImmediate(() => {
+        if (commands.length <= 0)
+          done();
+        else
+          otherAgent.push(`${commands.pop()}\n`);
+      });
+    }));
+    otherAgent.push(`${commands.pop()}\n`);
+  });
+
+  it('PRIVMSG, NOTICE ERR_NOTEXTTOSEND', function(done) {
+    const commands = [
+      'PRIVMSG basic :',
+      'NOTICE basic',
+    ]
+    otherAgent.on('response', waitFor('412', () => {
+      setImmediate(() => {
+        if (commands.length <= 0)
+          done();
+        else
+          otherAgent.push(`${commands.pop()}\n`);
+      });
+    }));
+    otherAgent.push(`${commands.pop()}\n`);
+  });
+
+  it('ERR_NONICKNAMEGIVEN', function(done) {
+    const commands = [
+      'WHOWAS',
+      'WHOIS',
+      'NICK',
+    ]
+    otherAgent.on('response', waitFor('431', () => {
+      setImmediate(() => {
+        if (commands.length <= 0)
+          done();
+        else
+          otherAgent.push(`${commands.pop()}\n`);
+      });
+    }));
+    otherAgent.push(`${commands.pop()}\n`);
   });
 
   it('ADMIN', function(done) {
@@ -165,41 +235,6 @@ describe('ircserv basic commands', function() {
   it('TOPIC change', function(done) {
     mockAgent.on('response', waitFor('fluffy ass cats', done));
     mockAgent.push('topic #cats :fluffy ass cats\n');
-  });
-
-  it('MODE user +i (invisible)', function(done) {
-    otherAgent.on('response', waitFor('other +i', done));
-    otherAgent.push('mode other +i\n');
-  });
-
-  it.skip('MODE user -i (invisible)', function(done) {
-    otherAgent.on('response', waitFor('-i', done));
-    otherAgent.push('mode other -i\n');
-  });
-
-  it('MODE chan +i (invite) no privs', function(done) {
-    otherAgent.on('response', waitFor('482', done));
-    otherAgent.push('mode #cats +i\n');
-  });
-
-  it('MODE chan +i (invite) with privs', function(done) {
-    mockAgent.on('response', waitFor('+itn', done));
-    mockAgent.push('mode #cats +i\n');
-  });
-
-  it('MODE chan +o no privs', function(done) {
-    otherAgent.on('response', waitFor('482', done));
-    otherAgent.push('mode #cats +o other\n');
-  });
-
-  it('MODE chan +o with privs', function(done) {
-    mockAgent.on('response', waitFor('MODE #cats +o other', done));
-    mockAgent.push('mode #cats +o other\n');
-  });
-
-  it('MODE chan -o with privs', function(done) {
-    mockAgent.on('response', waitFor('MODE #cats -o other', done));
-    mockAgent.push('mode #cats -o other\n');
   });
 
   it('KICK with privs', function(done) {
