@@ -4,14 +4,17 @@
   "description": "irc server for node.js",
   "main": "index.js",
   "scripts": {
-    "start": "node bin/ircserv.js",
+    "build": "docker build . --tag ircserv",
+    "gendist": "rm -rf dist/ && docker create ircserv | xargs -I$ docker cp $:/usr/src/app/ dist && rm -rf dist/node_modules",
     "lint": "eslint .",
-    "test": "nyc mocha"
+    "test": "nyc mocha",
+    "version": "npm run build && npm run gendist && git commit -a -m'release'",
+    "postversion": "git push && git push --tags"
   },
   "author": "Matthew Zinke <zinkem@gmail.com>",
   "repository": {
-    "type" : "git",
-    "url" : "https://github.com/zinkem/ircserv.git"
+    "type": "git",
+    "url": "https://github.com/zinkem/ircserv.git"
   },
   "license": "MIT",
   "dependencies": {
@@ -21,7 +24,7 @@
     "eslint": "^4.19.1",
     "eslint-config-airbnb-base": "^13.0.0",
     "eslint-plugin-import": "^2.12.0",
-    "mocha": "^5.2.0",
-    "nyc": "^13.0.1"
+    "mocha": "^7.1.2",
+    "nyc": "^15.0.1"
   }
 }
